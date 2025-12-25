@@ -1,6 +1,6 @@
-﻿using Humanizer;
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
+using Humanizer;
 
 namespace AngryMonkey
 {
@@ -250,7 +250,7 @@ namespace AngryMonkey
             => token.Replace('_', ' ').Replace('-', ' ').Humanize(LetterCasing.Title);
 
         // ---- minimal frontmatter + H1 extraction ----
-        private static MarkdownTitleResolver resolver = null;
+        private static MarkdownTitleResolver resolver;
         private static string TryGetFrontMatterTitle(string md)
         {
             resolver ??= new MarkdownTitleResolver(Program.CurrentHive.Destination);

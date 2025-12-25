@@ -1,5 +1,5 @@
-﻿using System.Text;
-using System.Net;
+﻿using System.Net;
+using System.Text;
 using Humanizer;
 
 namespace AngryMonkey

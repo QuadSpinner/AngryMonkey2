@@ -1,6 +1,5 @@
-﻿using System.Text;
-using System.Collections.Concurrent;
-using Markdig;
+﻿using System.Collections.Concurrent;
+using System.Text;
 using Markdig.Helpers;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
