@@ -8,8 +8,8 @@
 
         public string Filename { get; set; }
 
-        public Dictionary<string, string> AlternateNames { get; set; } = new Dictionary<string, string>();
-        public Dictionary<string, string> Sublinks { get; set; } = new Dictionary<string, string>();
+        public Dictionary<string, string> AlternateNames { get; set; } = [];
+        public Dictionary<string, string> Sublinks { get; set; } = [];
 
         public string UID { get; set; }
 
@@ -25,6 +25,7 @@
 
         public Link HrefPrev { get; set; }
         public Link HrefNext { get; set; }
+        public string Link { get; set; }
 
         private static string Strip(string name)
         {

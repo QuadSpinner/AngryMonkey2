@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using AngryMonkey.Objects;
+﻿using AngryMonkey.Objects;
 using Markdig;
 using Markdig.Extensions.AutoIdentifiers;
 using Markdig.Syntax;
@@ -21,11 +20,16 @@ public static class Program
     public static string Html;
     public static MarkdownPipeline pipeline;
 
-    private static Dictionary<string, string> TOC = [];
-    private static Dictionary<string, string> Titles = [];
-    private static Dictionary<string, string> mdTitles = [];
+    //private static Dictionary<string, string> TOC = [];
+    //private static Dictionary<string, string> Titles = [];
+    //private static Dictionary<string, string> mdTitles = [];
+    internal static List<Link> Links = [];
+
+    internal static List<Page> Pages = [];
 
     internal static List<SearchObject> SearchObjects = [];
+
+    internal static Dictionary<string, Link> Slugs = [];
 
     internal static Hive CurrentHive { get; set; }
 
@@ -38,10 +42,9 @@ public static class Program
 
                 if (Environment.CommandLine.Contains("--assets"))
                 {
-
                     AnsiConsole.WriteLine();
 
-                    AnsiConsole.MarkupLine("[white]The Monkey copied assets only[/] [green][[Success]][/]");
+                    AnsiConsole.MarkupLine("[white]The Monkey copied assets only[/] [Fuchsia][[Success]][/]");
                     Environment.Exit(0);
                     return;
                 }
@@ -65,18 +68,26 @@ public static class Program
 
                 Hive[] hives =
                 [
-                    new()
+                   new()
                     {
-                        Name = "User Guide",
+                        Name = "Getting Started",
+                        Source = @"X:\Docs\Gaea2-Docs\Source\GettingStarted",
+                        Destination = @"X:\Docs\Gaea2-Docs\staging\introduction",
+                        ShortName = "Introduction",
+                        URL = "/introduction"
+                    },  new()
+                    {
+                        Name = "Using Gaea",
                         Source = @"X:\Docs\Gaea2-Docs\Source\UserGuide",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\",
-                        ShortName = "Manual"
+                        Destination = @"X:\Docs\Gaea2-Docs\staging\Guide",
+                        ShortName = "Manual",
+                        URL = "/Guide"
                     },
                     new()
                     {
                         Name = "Node Reference",
                         Source = @"X:\Docs\Gaea2-Docs\Source\Nodes",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\Reference",
+                        Destination = @"X:\Docs\Gaea2-Docs\staging\reference",
                         ShortName = "Reference",
                         URL = "/Reference"
                     }
@@ -89,11 +100,15 @@ public static class Program
 
                 foreach (Hive hive in hives)
                 {
-                    ctx.Status($"Processing {hive.Name}...");
                     CurrentHive = hive;
+
+                    ctx.Status($"Collecting pages from {hive.Name}...");
+                    CollectPages(hive);
+
+                    ctx.Status($"Processing {hive.Name}...");
                     //RenameFiles(hive);
                     //PreprocessMarkdown(hive);
-                    ParseTOC(hive);
+                    //ParseTOC(hive);
                     RecreateDestination(hive);
                     ProcessMarkdown(hive);
                 }
@@ -113,6 +128,63 @@ public static class Program
         AnsiConsole.MarkupLine("[white]The Monkey has gone home[/] [green][[Success]][/]");
 
         //File.WriteAllLines($"{Root}\\images.txt", images);
+    }
+
+    private static void CollectPages(Hive hive)
+    {
+        string[] md = Directory.GetFiles(hive.Source, "*.md", SearchOption.AllDirectories);
+
+        foreach (var file in md)
+        {
+            try
+            {
+                var yaml = FrontMatter.GetFrontMatter(File.ReadAllLines(file));
+                string title = yaml["title"];
+
+                var page = new Page()
+                {
+                    Filename = file,
+                    Hive = hive,
+                    Link = file.Replace(hive.Source, $"/{hive.URL}").Replace("\\", "/").Replace(".md", ".html"),
+                    Contents = File.ReadAllText(file),
+                    Title = yaml["title"],
+                    UID = yaml["uid"],
+                    Hidden = yaml.ContainsKey("show") && yaml["show"] == "no",
+                    StartsSection = yaml.ContainsKey("section") && yaml["section"] == "true"
+                };
+
+                Pages.Add(page);
+
+                var link = new Link(file.Replace(hive.Source, $"/{hive.URL}").Replace("\\", "/").Replace(".md", ".html"), title, yaml["uid"]);
+                Links.Add(link);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(file);
+                Console.WriteLine(ex.Message);
+            }
+        }
+
+        // find duplicates in LINKS by slug
+
+        List<string> duplicateSlugs = Links.GroupBy(l => l.Slug)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        if (duplicateSlugs.Any())
+        {
+            AnsiConsole.WriteLine("DUPLICATES:");
+            foreach (string duplicateSlug in duplicateSlugs)
+            {
+                AnsiConsole.WriteLine(duplicateSlug);
+            }
+            throw new Exception("Duplicate slugs found");
+        }
+        else
+        {
+            Slugs = Links.ToDictionary(x => x.Slug);
+        }
     }
 
     private static void RenameFiles(Hive hive)
@@ -167,34 +239,34 @@ public static class Program
         }
     }
 
-    private static void ParseTOC(Hive hive)
-    {
-        TOC.Clear();
-        Titles.Clear();
-        mdTitles.Clear();
+    //private static void ParseTOC(Hive hive)
+    //{
+    //    TOC.Clear();
+    //    Titles.Clear();
+    //    mdTitles.Clear();
 
-        string tocFile = Path.Combine(hive.Source, "SUMMARY.md");
-        string hivePrefix = hive.Destination.Split('\\')[^1];
+    //    string tocFile = Path.Combine(hive.Source, "SUMMARY.md");
+    //    string hivePrefix = hive.Destination.Split('\\')[^1];
 
-        string[] lines = File.ReadAllLines(tocFile);
-        foreach (var line in lines)
-        {
-            if (line.Trim().StartsWith("* ["))
-            {
-                int startTitle = line.IndexOf('[') + 1;
-                int endTitle = line.IndexOf(']');
-                int startLink = line.IndexOf('(') + 1;
-                int endLink = line.IndexOf(')');
-                if (startTitle >= 0 && endTitle > startTitle && startLink >= 0 && endLink > startLink)
-                {
-                    string title = line.Substring(startTitle, endTitle - startTitle);
-                    string link = $"{hivePrefix}/{line.Substring(startLink, endLink - startLink)}";
-                    TOC[link] = title;
-                    Titles[title] = link;
-                }
-            }
-        }
-    }
+    //    string[] lines = File.ReadAllLines(tocFile);
+    //    foreach (var line in lines)
+    //    {
+    //        if (line.Trim().StartsWith("* ["))
+    //        {
+    //            int startTitle = line.IndexOf('[') + 1;
+    //            int endTitle = line.IndexOf(']');
+    //            int startLink = line.IndexOf('(') + 1;
+    //            int endLink = line.IndexOf(')');
+    //            if (startTitle >= 0 && endTitle > startTitle && startLink >= 0 && endLink > startLink)
+    //            {
+    //                string title = line.Substring(startTitle, endTitle - startTitle);
+    //                string link = $"{hivePrefix}/{line.Substring(startLink, endLink - startLink)}";
+    //                TOC[link] = title;
+    //                Titles[title] = link;
+    //            }
+    //        }
+    //    }
+    //}
 
     public static void RecreateDestination(Hive hive, bool delete = false)
     {
@@ -221,30 +293,34 @@ public static class Program
         //}
     }
 
-    private static List<string> images = new List<string>(5000);
+    //private static List<string> images = new List<string>(5000);
 
     public static void ProcessMarkdown(Hive hive)
     {
         string[] md = Directory.GetFiles(hive.Destination, "*.md", SearchOption.AllDirectories);
 
         var resolver = new MarkdownTitleResolver(hive.Destination);
-        List<TocNode> toc = SummaryToc.BuildFromFile(summaryMdPath: hive.Destination + "\\summary.md",
-            options: new SummaryTocOptions
-            {
-                BaseUrl = hive.URL ?? "/",
-                PromoteParentLinksToGroups = true,
-                OverviewTitle = "Overview"
-            });
+        //List<TocNode> toc = SummaryToc.BuildFromFile(summaryMdPath: hive.Destination + "\\summary.md",
+        //    options: new SummaryTocOptions
+        //    {
+        //        BaseUrl = hive.URL ?? "/",
+        //        PromoteParentLinksToGroups = true,
+        //        OverviewTitle = "Overview"
+        //    });
 
-        string js = SummaryToc.ToJavascript(toc);
-        Directory.CreateDirectory($"{StagingFolder}\\assets");
-        File.WriteAllText($@"{StagingFolder}\assets\TOC_{hive.ShortName}.js", js);
+        //string js = SummaryToc.ToJavascript(toc);
+        //Directory.CreateDirectory($"{StagingFolder}\\assets");
+        //File.WriteAllText($@"{StagingFolder}\assets\TOC_{hive.ShortName}.js", js);
+
+        FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\");
 
         foreach (var file in md)
         {
             string html = Html;
 
             string content = File.ReadAllText(file).Replace(".md", ".html");
+
+            content = ProcessSlugs(content);
 
             MarkdownDocument doc = Markdown.Parse(content, pipeline);
 
@@ -260,14 +336,14 @@ public static class Program
                 var dic = FrontMatter.GetFrontMatter(content.Split(Environment.NewLine));
                 string title = dic["title"];
 
-                var nav = DocNav.Build(file.Replace(hive.Destination, ""), hive.Name, title);
+                //var nav = DocNav.Build(file.Replace(hive.Destination, ""), hive.Name, title);
 
                 html = html.Replace("%%TITLE%%", title)
                     .Replace("%%HIVE%%", hive.Name)
-                    .Replace("%%CRUMBS%%", $"{nav.BreadcrumbHtml}")
+                    .Replace("%%CRUMBS%%", $"")
                     .Replace("%%SHORTNAME%%", hive.ShortName)
                     .Replace("%%SLUG%%", dic["uid"])
-                    .Replace("%%PAGETITLE%%", $"\n{nav.PretitleHtml}\n{nav.PageTitleHtml}");
+                    .Replace("%%PAGETITLE%%", $"\n{hive.Name}\n{title}");
 
                 SearchObjects.Add(SearchObject.ToSearchObject(content, title, hive, dic["uid"]));
             }
@@ -277,7 +353,18 @@ public static class Program
                 Console.WriteLine(ex.Message);
             }
 
-            File.WriteAllText(file.Replace("README", "index").Replace(".md", ".html"), html);
+            File.WriteAllText(file.Replace(".md", ".html"), html);
         }
+    }
+
+    private static string ProcessSlugs(string content)
+    {
+        foreach ((string key, Link link) in Slugs)
+        {
+            content = content.Replace($"(@{key})", link.Href);
+            content = content.Replace($"@{key}", $"[{link.Title}]({link.Href})");
+        }
+
+        return content;
     }
 }
