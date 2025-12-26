@@ -9,5 +9,6 @@
         public string Source { get; set; }
         public string Destination { get; set; }
         public string ShortName { get; set; }
+        public bool IsHome { get; set; } = false;
     }
 }

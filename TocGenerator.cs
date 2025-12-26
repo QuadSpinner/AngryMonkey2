@@ -1,8 +1,8 @@
-﻿using Humanizer;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Humanizer;
 
 namespace AngryMonkey
 {
@@ -100,9 +100,11 @@ namespace AngryMonkey
 
             [JsonPropertyName("url")]
             public string Url { get; set; }
+            [JsonPropertyName("icon")]
+            public string Icon { get; set; }
 
             [JsonPropertyName("section")]
-            public bool? Section { get; set; } = null;
+            public bool? Section { get; set; }
 
             [JsonPropertyName("children")]
             public List<TocItem> Children { get; set; }
@@ -112,13 +114,15 @@ namespace AngryMonkey
         // Build (folders as groups)
         // -----------------------------
 
+        // 1) change signature to accept iconOverrideFromParent
         private static TocItem BuildFolderGroup(
             DirectoryInfo hiveRoot,
             DirectoryInfo dir,
             string baseUrl,
             string manifestFileName,
             string indexFileName,
-            string titleOverrideFromParent)
+            string titleOverrideFromParent,
+            string iconOverrideFromParent)
         {
             var title = !string.IsNullOrWhiteSpace(titleOverrideFromParent)
                 ? titleOverrideFromParent!
@@ -135,9 +139,11 @@ namespace AngryMonkey
             return new TocItem
             {
                 Title = title,
-                Children = children.Count > 0 ? children : null
+                Children = children.Count > 0 ? children : null,
+                Icon = !string.IsNullOrWhiteSpace(iconOverrideFromParent) ? iconOverrideFromParent : null
             };
         }
+
 
         private static List<TocItem> BuildFolderChildren(
             DirectoryInfo hiveRoot,
@@ -155,8 +161,8 @@ namespace AngryMonkey
                 var indexPath = Path.Combine(currentDir.FullName, indexFileName);
                 if (File.Exists(indexPath))
                 {
-                    var meta = ReadFrontMatter(indexPath);
-                    var title = meta.Title ?? "Overview";
+                    //var meta = ReadFrontMatter(indexPath);
+                    var title = "Overview";
                     var url = UrlForIndex(hiveRoot.FullName, indexPath, baseUrl);
                     items.Add(new TocItem { Title = title, Url = url });
                 }
@@ -173,8 +179,9 @@ namespace AngryMonkey
                     {
                         File = f,
                         Title = meta.Title ?? ToTitle(Path.GetFileNameWithoutExtension(f.Name)),
-                        Order = meta.Order,
-                        Section = meta.Section
+                        meta.Order,
+                        meta.Section,
+                        meta.Icon
                     };
                 })
                 .OrderBy(x => x.Order)
@@ -184,7 +191,8 @@ namespace AngryMonkey
                 {
                     Title = x.Title,
                     Url = UrlForPage(hiveRoot.FullName, x.File.FullName, baseUrl),
-                    Section = x.Section
+                    Section = x.Section,
+                    Icon = x.Icon
                 });
 
             items.AddRange(pages);
@@ -201,7 +209,16 @@ namespace AngryMonkey
             foreach (var d in sortedSubdirs)
             {
                 manifest.Titles.TryGetValue(d.Name, out var overrideTitle);
-                items.Add(BuildFolderGroup(hiveRoot, d, baseUrl, manifestFileName, indexFileName, overrideTitle));
+                manifest.Icons.TryGetValue(d.Name, out var overrideIcon);
+
+                items.Add(BuildFolderGroup(
+                    hiveRoot,
+                    d,
+                    baseUrl,
+                    manifestFileName,
+                    indexFileName,
+                    overrideTitle,
+                    overrideIcon));
             }
 
             return items;
@@ -215,6 +232,8 @@ namespace AngryMonkey
         {
             public List<string> Order { get; } = [];
             public Dictionary<string, string> Titles { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public Dictionary<string, string> Icons { get; } = new(StringComparer.OrdinalIgnoreCase);
+
         }
 
         private static FolderManifest ReadFoldersManifest(string dirPath, string manifestFileName)
@@ -235,15 +254,12 @@ namespace AngryMonkey
                 if (line.Length == 0) continue;
                 if (line.StartsWith("#", StringComparison.Ordinal)) continue;
 
-                var pipe = line.IndexOf('|');
-                if (pipe < 0)
-                {
-                    m.Order.Add(line);
-                    continue;
-                }
+                // name|title|icon   (title, icon optional)
+                var parts = line.Split('|');
 
-                var name = line[..pipe].Trim();
-                var title = line[(pipe + 1)..].Trim();
+                var name = parts.Length > 0 ? parts[0].Trim() : "";
+                var title = parts.Length > 1 ? parts[1].Trim() : "";
+                var icon = parts.Length > 2 ? parts[2].Trim() : "";
 
                 if (name.Length == 0) continue;
 
@@ -251,6 +267,9 @@ namespace AngryMonkey
 
                 if (title.Length > 0)
                     m.Titles[name] = title;
+
+                if (icon.Length > 0)
+                    m.Icons[name] = icon;
             }
 
             // de-dupe (keep first)
@@ -262,6 +281,7 @@ namespace AngryMonkey
 
             return m;
         }
+
 
         private static IEnumerable<DirectoryInfo> SortSubdirs(DirectoryInfo[] subdirs, List<string> orderedNames)
         {
@@ -284,6 +304,7 @@ namespace AngryMonkey
         private sealed class PageMeta
         {
             public string Title { get; init; }
+            public string Icon { get; init; }
             public int Order { get; init; }
             public bool? Section { get; init; }
         }
@@ -294,6 +315,7 @@ namespace AngryMonkey
 
             fm.TryGetValue("title", out var title);
             fm.TryGetValue("order", out var orderStr);
+            fm.TryGetValue("icon", out var iconStr);
             bool? section = fm.ContainsKey("section") ? true : null;
 
             if (string.IsNullOrWhiteSpace(title))
@@ -304,7 +326,7 @@ namespace AngryMonkey
                 int.TryParse(orderStr.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
                 order = n;
 
-            return new PageMeta { Title = title, Order = order, Section = section };
+            return new PageMeta { Title = title, Order = order, Section = section, Icon = iconStr };
         }
 
         // -----------------------------
