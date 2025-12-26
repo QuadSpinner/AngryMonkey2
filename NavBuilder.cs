@@ -30,6 +30,8 @@ namespace AngryMonkey
     {
         public string Title { get; set; } = "";
         public string Url { get; set; }
+        public string Slug { get; set; }
+        public int Order { get; set; }
         public List<TocNode> Children { get; set; }
     }
 
@@ -193,7 +195,7 @@ namespace AngryMonkey
             //if (options.TitleResolver != null)
             //    return options.TitleResolver(md) ?? "";
 
-            return TryGetFrontMatterTitle(absMdFile) ?? "";
+            return ""; // TryGetFrontMatterTitle(absMdFile) ?? "";
         }
 
         private static bool IsReadme(string absFile, SiteTocBuilderOptions options)
@@ -249,13 +251,13 @@ namespace AngryMonkey
         private static string HumanizeToken(string token)
             => token.Replace('_', ' ').Replace('-', ' ').Humanize(LetterCasing.Title);
 
-        // ---- minimal frontmatter + H1 extraction ----
-        private static MarkdownTitleResolver resolver;
-        private static string TryGetFrontMatterTitle(string md)
-        {
-            resolver ??= new MarkdownTitleResolver(Program.CurrentHive.Destination);
+        //// ---- minimal frontmatter + H1 extraction ----
+        //private static MarkdownTitleResolver resolver;
+        //private static string TryGetFrontMatterTitle(string md)
+        //{
+        //    resolver ??= new MarkdownTitleResolver(Program.CurrentHive.Destination);
 
-            return resolver.TryGetTitle(md);
-        }
+        //    return resolver.TryGetTitle(md);
+        //}
     }
 }

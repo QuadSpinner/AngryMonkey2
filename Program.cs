@@ -30,6 +30,7 @@ public static class Program
     internal static List<SearchObject> SearchObjects = [];
 
     internal static Dictionary<string, Link> Slugs = [];
+    internal static List<string> RogueAts = [];
 
     internal static Hive CurrentHive { get; set; }
 
@@ -44,7 +45,7 @@ public static class Program
                 {
                     AnsiConsole.WriteLine();
 
-                    AnsiConsole.MarkupLine("[white]The Monkey copied assets only[/] [Fuchsia][[Success]][/]");
+                    AnsiConsole.MarkupLine("[white]The Monkey copied assets only[/] [Fuchsia][[shows teeth]][/]");
                     Environment.Exit(0);
                     return;
                 }
@@ -101,19 +102,26 @@ public static class Program
                 foreach (Hive hive in hives)
                 {
                     CurrentHive = hive;
-
+                    //FolderManifest.GenerateFoldersTxtRecursively(hive.Source);
                     ctx.Status($"Collecting pages from {hive.Name}...");
                     CollectPages(hive);
 
+                    ctx.Status($"Generating navigation for {hive.Name}...");
+                    GenerateNavigation(hive);
+
                     ctx.Status($"Processing {hive.Name}...");
-                    //RenameFiles(hive);
-                    //PreprocessMarkdown(hive);
-                    //ParseTOC(hive);
+                    // RenameFiles(hive);
                     RecreateDestination(hive);
                     ProcessMarkdown(hive);
                 }
 
                 File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
+
+                if (RogueAts.Any())
+                {
+                    AnsiConsole.MarkupLine($"[DarkOrange] {RogueAts.Count} rogue @s found![/] See RogueAts.txt");
+                    File.WriteAllText($"{RootFolder}\\rogueAts.txt", string.Join(Environment.NewLine, RogueAts.Distinct()));
+                }
 
                 //ctx.Status("Running PageFind...");
 
@@ -125,9 +133,17 @@ public static class Program
 
         AnsiConsole.WriteLine();
 
-        AnsiConsole.MarkupLine("[white]The Monkey has gone home[/] [green][[Success]][/]");
+        AnsiConsole.MarkupLine("[white]The Monkey is happy.[/] [green][[Success - oo oo aa ahh ahh!]][/]");
 
         //File.WriteAllLines($"{Root}\\images.txt", images);
+    }
+
+    private static void GenerateNavigation(Hive hive)
+    {
+        TocGenerator.WriteHiveTocJs(
+            hiveRootDir: hive.Source,
+            baseUrl: hive.URL,
+            outputJsPath: $@"{RootFolder}\Hives\TOC_{hive.ShortName}.js");
     }
 
     private static void CollectPages(Hive hive)
@@ -145,7 +161,7 @@ public static class Program
                 {
                     Filename = file,
                     Hive = hive,
-                    Link = file.Replace(hive.Source, $"/{hive.URL}").Replace("\\", "/").Replace(".md", ".html"),
+                    Link = file.Replace(hive.Source, hive.URL).Replace("\\", "/").Replace(".md", ".html"),
                     Contents = File.ReadAllText(file),
                     Title = yaml["title"],
                     UID = yaml["uid"],
@@ -155,7 +171,7 @@ public static class Program
 
                 Pages.Add(page);
 
-                var link = new Link(file.Replace(hive.Source, $"/{hive.URL}").Replace("\\", "/").Replace(".md", ".html"), title, yaml["uid"]);
+                var link = new Link(page.Link, title, yaml["uid"]);
                 Links.Add(link);
             }
             catch (Exception ex)
@@ -215,7 +231,18 @@ public static class Program
                 counter = 1;
             }
 
-            File.Move(fullPath, $"{filePath}\\{counter:00}-{Path.GetFileName(fullPath)}");
+            string[] mdlines = File.ReadAllLines(fullPath);
+            var yaml = FrontMatter.GetFrontMatter(mdlines);
+
+            if (!yaml.ContainsKey("order"))
+            {
+                yaml["order"] = $"{counter:00}";
+            }
+
+            File.WriteAllText(fullPath, FrontMatter.ReplaceFrontMatter(mdlines, yaml));
+
+            // Console.WriteLine($"{filePath}\\{counter:00}-{Path.GetFileName(fullPath)}");
+            // File.Move(fullPath, $"{filePath}\\{counter:00}-{Path.GetFileName(fullPath)}");
             counter++;
         }
     }
@@ -299,7 +326,6 @@ public static class Program
     {
         string[] md = Directory.GetFiles(hive.Destination, "*.md", SearchOption.AllDirectories);
 
-        var resolver = new MarkdownTitleResolver(hive.Destination);
         //List<TocNode> toc = SummaryToc.BuildFromFile(summaryMdPath: hive.Destination + "\\summary.md",
         //    options: new SummaryTocOptions
         //    {
@@ -324,8 +350,6 @@ public static class Program
 
             MarkdownDocument doc = Markdown.Parse(content, pipeline);
 
-            MarkdownLinkTextToTargetTitle.Rewrite(doc, file, resolver);
-
             string contentHTML = doc.ToHtml(pipeline);
             html = html.Replace("%%CONTENT%%", contentHTML);
 
@@ -343,7 +367,12 @@ public static class Program
                     .Replace("%%CRUMBS%%", $"")
                     .Replace("%%SHORTNAME%%", hive.ShortName)
                     .Replace("%%SLUG%%", dic["uid"])
-                    .Replace("%%PAGETITLE%%", $"\n{hive.Name}\n{title}");
+                    .Replace("%%PAGETITLE%%", $"<span>{hive.Name}</span><span>{title}</span>");
+
+                if (content.Contains("@"))
+                {
+                    RogueAts.Add(file);
+                }
 
                 SearchObjects.Add(SearchObject.ToSearchObject(content, title, hive, dic["uid"]));
             }
