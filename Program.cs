@@ -36,39 +36,35 @@ public static class Program
 
     public static void Main(string[] arguments)
     {// Synchronous
-        FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\Assets");
-
         if (Environment.CommandLine.Contains("--assets"))
         {
             AnsiConsole.WriteLine();
-
+            FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\Assets", "*.*");
             AnsiConsole.MarkupLine("[white]The Monkey copied assets only[/] [Fuchsia][[shows teeth]][/]");
             Environment.Exit(0);
             return;
         }
-        AnsiConsole.Status()
-            .Start("Monkey is getting angry...", ctx =>
-            {
-                pipeline = new MarkdownPipelineBuilder()
-                    .UseAdvancedExtensions()
-                    .UseAlertBlocks()
-                    .UseAutoIdentifiers(AutoIdentifierOptions.GitHub)
-                    .UseYamlFrontMatter()
-                    .UsePipeTables()
-                    .UseMathematics()
-                    .UseFigures()
-                    .UseBootstrap()
-                    .UseEmojiAndSmiley()
-                    .UseGenericAttributes()
-                    .UseDefinitionLists()
-                    .UseCustomContainers()
-                    .Build();
 
-                SearchObjects = [];
+        pipeline = new MarkdownPipelineBuilder()
 
-                Hive[] hives =
-                [
-                   new()
+            .UseCustomContainers()
+            .UseAlertBlocks()
+            .UseAutoIdentifiers(AutoIdentifierOptions.GitHub)
+            .UseYamlFrontMatter()
+            .UsePipeTables()
+            //.UseMathematics()
+            .UseFigures()
+            //.UseBootstrap()
+            .UseEmojiAndSmiley()
+            .UseDefinitionLists()
+            .UseGenericAttributes()
+            .Build();
+
+        SearchObjects = [];
+
+        Hive[] hives =
+        [
+           new()
                     {
                         Name = "Home",
                         Source = @"X:\Docs\Gaea2-Docs\Source\",
@@ -77,15 +73,23 @@ public static class Program
                         IsHome = true,
                         URL = "/"
                     },
-                   new()
+                    new()
                     {
-                        Name = "Getting Started",
-                        Source = @"X:\Docs\Gaea2-Docs\Source\introduction",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\introduction",
-                        ShortName = "Introduction",
-                        URL = "/introduction"
+                        Name = "Install",
+                        Source = @"X:\Docs\Gaea2-Docs\Source\install",
+                        Destination = @"X:\Docs\Gaea2-Docs\staging\install",
+                        ShortName = "Install",
+                        URL = "/install"
                     },
-                   new()
+                    new()
+                    {
+                        Name = "User Interface",
+                        Source = @"X:\Docs\Gaea2-Docs\Source\ui",
+                        Destination = @"X:\Docs\Gaea2-Docs\staging\ui",
+                        ShortName = "UI",
+                        URL = "/ui"
+                    },
+                    new()
                     {
                         Name = "Using Gaea",
                         Source = @"X:\Docs\Gaea2-Docs\Source\using",
@@ -101,36 +105,47 @@ public static class Program
                         ShortName = "Reference",
                         URL = "/reference"
                     }
-                ];
+        ];
 
-                Html = File.ReadAllText(HtmlTemplate);
-                foreach (Hive hive in hives)
-                {
-                    CurrentHive = hive;
-                    //var result = FoldersTxtIconUpdater.UpdateIcons(rootDir: hive.Source, getFrontMatter: FrontMatter.GetFrontMatter);
-                    //Console.WriteLine($"Visited: {result.ManifestFilesVisited}, UpdatedFiles: {result.ManifestFilesUpdated}, Lines: {result.LinesUpdated}");
+        Html = File.ReadAllText(HtmlTemplate);
 
-                    //continue;
-                    //FolderManifest.GenerateFoldersTxtRecursively(hive.Source);
-                    ctx.Status($"Collecting pages from {hive.Name}...");
-                    CollectPages(hive);
+        foreach (Hive hive in hives)
+        {
+            DeleteStagedHive(hive);
+        }
 
-                    ctx.Status($"Generating navigation for {hive.Name}...");
-                    GenerateNavigation(hive);
+        foreach (Hive hive in hives)
+        {
+            CurrentHive = hive;
+            //var result = FoldersTxtIconUpdater.UpdateIcons(rootDir: hive.Source, getFrontMatter: FrontMatter.GetFrontMatter);
+            //Console.WriteLine($"Visited: {result.ManifestFilesVisited}, UpdatedFiles: {result.ManifestFilesUpdated}, Lines: {result.LinesUpdated}");
 
-                    ctx.Status($"Processing {hive.Name}...");
-                    RecreateDestination(hive);
-                    ProcessMarkdown(hive);
-                }
+            //AnsiConsole.WriteLine($"Collecting pages from {hive.Name}...");
+            //continue;
+            //FolderManifest.GenerateFoldersTxtRecursively(hive.Source);
+            CollectPages(hive);
+        }
 
-                File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
+        foreach (Hive hive in hives)
+        {
+            CurrentHive = hive;
+            //AnsiConsole.WriteLine($"Generating navigation for {hive.Name}...");
+            GenerateNavigation(hive);
 
-                if (RogueAts.Any())
-                {
-                    AnsiConsole.MarkupLine($"[DarkOrange] {RogueAts.Count} rogue @s found![/] See RogueAts.txt");
-                    File.WriteAllText($"{RootFolder}\\rogueAts.txt", string.Join(Environment.NewLine, RogueAts.Distinct()));
-                }
-            });
+            //AnsiConsole.WriteLine($"Processing {hive.Name}...");
+            FileService.CopyDirectory(hive.Source, hive.Destination);
+            ProcessMarkdown(hive);
+        }
+
+        FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\assets", "*.*");
+        FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\js\", "*.*");
+        File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
+
+        if (RogueAts.Any())
+        {
+            AnsiConsole.MarkupLine($"[DarkOrange] {RogueAts.Count} rogue @s found![/] See RogueAts.txt");
+            File.WriteAllText($"{RootFolder}\\rogueAts.txt", string.Join(Environment.NewLine, RogueAts.Distinct()));
+        }
 
         AnsiConsole.WriteLine();
 
@@ -201,23 +216,20 @@ public static class Program
         TocGenerator.WriteHiveTocJs(hive.Source, hive.URL, $@"{RootFolder}\Hives\TOC_{hive.ShortName}.js");
     }
 
-    public static void RecreateDestination(Hive hive, bool delete = false)
+    public static void DeleteStagedHive(Hive hive)
     {
-        if (delete)
-        {
-            if (Directory.Exists(hive.Destination))
-            {
-                Directory.Delete(hive.Destination, true);
-            }
-        }
+        if (hive.IsHome)
+            return;
 
-        FileService.CopyDirectory(hive.Source, hive.Destination);
+        if (Directory.Exists(hive.Destination))
+        {
+            Directory.Delete(hive.Destination, true);
+        }
     }
 
     public static void ProcessMarkdown(Hive hive)
     {
         string[] md = Directory.GetFiles(hive.Destination, "*.md", hive.IsHome ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories);
-        FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\js\");
 
         foreach (var file in md)
         {
@@ -234,12 +246,12 @@ public static class Program
 
             try
             {
-                var dic = FrontMatter.GetFrontMatter(content.Split(Environment.NewLine));
+                var splitter = content.Contains("\r\n") ? Environment.NewLine : "\n";
+                var dic = FrontMatter.GetFrontMatter(content.Split(splitter));
                 string title = dic["title"];
 
                 html = html.Replace("%%TITLE%%", title)
                     .Replace("%%HIVE%%", hive.Name)
-                    .Replace("%%CRUMBS%%", $"")
                     .Replace("%%SHORTNAME%%", hive.ShortName)
                     .Replace("%%SLUG%%", dic["uid"])
                     .Replace("%%PAGETITLE%%", $"<span>{hive.Name}</span><span>{title}</span>");
@@ -249,7 +261,7 @@ public static class Program
                     RogueAts.Add(file);
                 }
 
-                SearchObjects.Add(SearchObject.ToSearchObject(content, title, hive, dic["uid"]));
+                SearchObjects.Add(SearchBuilder.ToSearchObject(content, title, hive, Slugs.FirstOrDefault(x => x.Key == dic["uid"]).Value.Href));
             }
             catch (Exception ex)
             {
@@ -263,10 +275,10 @@ public static class Program
 
     private static string ProcessSlugs(string content)
     {
-        foreach ((string key, Link link) in Slugs)
+        foreach ((string key, Link link) in Slugs.OrderByDescending(x => x.Key.Length))
         {
-            content = content.Replace($"(@{key})", link.Href);
-            content = content.Replace($"@{key}", $"[{link.Title}]({link.Href})");
+            content = content.Replace($"(@{key})", link.Href, StringComparison.OrdinalIgnoreCase);
+            content = content.Replace($"@{key}", $"[{link.Title}]({link.Href})", StringComparison.OrdinalIgnoreCase);
         }
 
         return content;

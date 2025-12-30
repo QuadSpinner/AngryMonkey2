@@ -179,7 +179,6 @@ namespace AngryMonkey
                 {
                     // YAML content is (start+1 .. end-1)
                     var yaml = lines[(start + 1)..end].ToArray();
-                    var escapedTitle = title; //YamlDoubleQuoted(title);
 
                     int titleLine = FindTopLevelKeyLine(yaml, "title");
                     title = Slugify(yaml[titleLine].Split(':', StringSplitOptions.TrimEntries)[1]);
@@ -247,7 +246,7 @@ namespace AngryMonkey
         }
 
         // ASCII-ish, lowercase, kebab, collapse dashes.
-        internal static string Slugify(string? title)
+        internal static string Slugify(string title)
         {
             title ??= "";
             var s = RemoveDiacritics(title).ToLowerInvariant();

@@ -2,7 +2,7 @@
 {
     internal static class FileService
     {
-        internal static void CopyDirectory(string source, string destination)
+        internal static void CopyDirectory(string source, string destination, string pattern = "*.md")
         {
             Directory.CreateDirectory(destination);
 
@@ -11,7 +11,7 @@
                 Directory.CreateDirectory(dirPath.Replace(source, destination));
             }
 
-            foreach (string newPath in Directory.GetFiles(source, "*.*", SearchOption.AllDirectories))
+            foreach (string newPath in Directory.GetFiles(source, pattern, SearchOption.AllDirectories))
             {
                 File.Copy(newPath, newPath.Replace(source, destination), true);
             }
