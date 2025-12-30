@@ -1,4 +1,5 @@
 ﻿using AngryMonkey.Objects;
+using AngryMonkey.POCO;
 using Markdig;
 using Markdig.Extensions.AutoIdentifiers;
 using Markdig.Extensions.MediaLinks;
@@ -13,11 +14,11 @@ public static class Program
     //public static string source = "X:\\Gaea2\\Docs\\Source\\Nodes";
     //public static string destination = "X:\\Gaea2\\Docs\\staging";
 
-    public static string RootFolder = @"X:\Docs\Gaea2-Docs";
-    public static string StagingFolder = $@"{RootFolder}\staging";
+    public static string RootFolder;
+    public static string StagingFolder;
 
-    public static string Templates = @"X:\Docs\Gaea2-Docs\template\";
-    public static string HtmlTemplate = @"X:\Docs\Gaea2-Docs\template\template.html";
+    public static string Templates;
+    public static string HtmlTemplate;
     public static string Html;
     public static MarkdownPipeline pipeline;
 
@@ -33,21 +34,74 @@ public static class Program
     internal static Dictionary<string, Link> Slugs = [];
     internal static List<string> RogueAts = [];
 
-    internal static Hive CurrentHive { get; set; }
-
-    public static void Main(string[] arguments)
+    public static void Main(string[] args)
     {// Synchronous
-        if (Environment.CommandLine.Contains("--assets"))
+        SearchObjects = [];
+
+        string config = "";
+
+        if (args.Length <= 1)
         {
-            AnsiConsole.WriteLine();
-            FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\Assets", "*.*");
-            AnsiConsole.MarkupLine("[white]The Monkey copied assets only[/] [Fuchsia][[shows teeth]][/]");
-            Environment.Exit(0);
+            if (File.Exists(Environment.CurrentDirectory + "\\hives.json"))
+            {
+                config = Environment.CurrentDirectory + "\\hives.json";
+            }
+            else
+            {
+                AnsiConsole.MarkupLine("[red]Configuration file not found![/] Pass the config file as the second argument.");
+                return;
+            }
+        }
+
+        if (args.Length > 1)
+        {
+            if (File.Exists(args[1]))
+            {
+                config = args[1];
+            }
+            else
+            {
+                if (Directory.Exists(args[1]))
+                {
+                    if (File.Exists(args[1] + "\\hives.json"))
+                    {
+                        config = args[1] + "\\hives.json";
+                    }
+                }
+            }
+        }
+
+        if (config == "")
+        {
+            AnsiConsole.MarkupLine("[red]Configuration file not found![/] Pass the config file as the second argument.");
             return;
         }
 
-        pipeline = new MarkdownPipelineBuilder()
+        AppConfig cfg = LoadConfiguration(config);
 
+        Hive[] hives = Config.BuildHives(cfg);
+
+        //if (Directory.Exists(StagingFolder))
+        //    Directory.Delete(StagingFolder, true);
+        //Directory.CreateDirectory(StagingFolder);
+
+        if (args.Any(a => string.Equals(a, "--assets", StringComparison.OrdinalIgnoreCase)))
+        {
+            AnsiConsole.WriteLine();
+            FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\assets", "*.*");
+            AnsiConsole.MarkupLine("[white]The Monkey copied assets only[/] [Fuchsia][[shows teeth]][/]");
+            return;
+        }
+
+        Html = File.ReadAllText(HtmlTemplate);
+
+        Links.Clear();
+        Pages.Clear();
+        SearchObjects.Clear();
+        RogueAts.Clear();
+        Slugs.Clear();
+
+        pipeline = new MarkdownPipelineBuilder()
             .UseCustomContainers()
             .UseAlertBlocks()
             .UseAutoIdentifiers(AutoIdentifierOptions.GitHub)
@@ -59,78 +113,11 @@ public static class Program
                 Width = "",
                 Height = ""
             })
-            //.UseMathematics()
             .UseFigures()
-            //.UseBootstrap()
             .UseEmojiAndSmiley()
             .UseDefinitionLists()
             .UseGenericAttributes()
             .Build();
-
-        SearchObjects = [];
-
-        Hive[] hives =
-        [
-           new()
-                    {
-                        Name = "Home",
-                        Source = @"X:\Docs\Gaea2-Docs\Source\",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\",
-                        ShortName = "Home",
-                        IsHome = true,
-                        URL = "/"
-                    },
-                    new()
-                    {
-                        Name = "Install",
-                        Source = @"X:\Docs\Gaea2-Docs\Source\install",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\install",
-                        ShortName = "Install",
-                        URL = "/install"
-                    },
-                    new()
-                    {
-                        Name = "User Interface",
-                        Source = @"X:\Docs\Gaea2-Docs\Source\ui",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\ui",
-                        ShortName = "UI",
-                        URL = "/ui"
-                    },
-                    new()
-                    {
-                        Name = "Using Gaea",
-                        Source = @"X:\Docs\Gaea2-Docs\Source\using",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\using",
-                        ShortName = "Using",
-                        URL = "/using"
-                    },
-                    new()
-                    {
-                        Name = "Node Reference",
-                        Source = @"X:\Docs\Gaea2-Docs\Source\reference",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\reference",
-                        ShortName = "Reference",
-                        URL = "/reference"
-                    },
-                    new()
-                    {
-                        Name = "Guides",
-                        Source = @"X:\Docs\Gaea2-Docs\Source\guides",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\guides",
-                        ShortName = "Guides",
-                        URL = "/guides"
-                    },
-                    new()
-                    {
-                        Name = "Developers",
-                        Source = @"X:\Docs\Gaea2-Docs\Source\developers",
-                        Destination = @"X:\Docs\Gaea2-Docs\staging\developers",
-                        ShortName = "Developers",
-                        URL = "/developers"
-                    }
-        ];
-
-        Html = File.ReadAllText(HtmlTemplate);
 
         foreach (Hive hive in hives)
         {
@@ -139,23 +126,14 @@ public static class Program
 
         foreach (Hive hive in hives)
         {
-            CurrentHive = hive;
-            //var result = FoldersTxtIconUpdater.UpdateIcons(rootDir: hive.Source, getFrontMatter: FrontMatter.GetFrontMatter);
-            //Console.WriteLine($"Visited: {result.ManifestFilesVisited}, UpdatedFiles: {result.ManifestFilesUpdated}, Lines: {result.LinesUpdated}");
-
-            //AnsiConsole.WriteLine($"Collecting pages from {hive.Name}...");
-            //continue;
-            //FolderManifest.GenerateFoldersTxtRecursively(hive.Source);
             CollectPages(hive);
         }
 
+        BuildSlugIndex();
+
         foreach (Hive hive in hives)
         {
-            CurrentHive = hive;
-            //AnsiConsole.WriteLine($"Generating navigation for {hive.Name}...");
             GenerateNavigation(hive);
-
-            //AnsiConsole.WriteLine($"Processing {hive.Name}...");
             FileService.CopyDirectory(hive.Source, hive.Destination);
             ProcessMarkdown(hive);
         }
@@ -171,8 +149,35 @@ public static class Program
         }
 
         AnsiConsole.WriteLine();
-
         AnsiConsole.MarkupLine("[white]The Monkey is happy.[/] [green][[Success - oo oo aa ahh ahh!]][/]");
+    }
+
+    private static AppConfig LoadConfiguration(string config)
+    {
+        var cfg = Config.LoadConfig(config);
+
+        RootFolder = cfg.RootFolder;
+        StagingFolder = cfg.StagingRoot;
+        Templates = cfg.TemplatesFolder;
+        HtmlTemplate = cfg.HtmlTemplate;
+        return cfg;
+    }
+
+    private static void BuildSlugIndex()
+    {
+        var duplicates = Links.GroupBy(l => l.Slug, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        if (duplicates.Count > 0)
+        {
+            AnsiConsole.WriteLine("DUPLICATES:");
+            foreach (var s in duplicates) AnsiConsole.WriteLine(s);
+            throw new Exception("Duplicate slugs found");
+        }
+
+        Slugs = Links.ToDictionary(x => x.Slug, StringComparer.OrdinalIgnoreCase);
     }
 
     private static void CollectPages(Hive hive)
@@ -258,7 +263,7 @@ public static class Program
         {
             string html = Html;
 
-            string content = File.ReadAllText(file).Replace(".md", ".html");
+            string content = File.ReadAllText(file);
 
             content = ProcessSlugs(content);
 
@@ -284,7 +289,10 @@ public static class Program
                     RogueAts.Add(file);
                 }
 
-                SearchObjects.Add(SearchBuilder.ToSearchObject(content, title, hive, Slugs.FirstOrDefault(x => x.Key == dic["uid"]).Value.Href));
+                if (!Slugs.TryGetValue(dic["uid"], out var slugLink))
+                    slugLink = new Link(hive.URL, title, dic["uid"]); // fallback (or page.Link if you have it)
+
+                SearchObjects.Add(SearchBuilder.ToSearchObject(content, title, hive, slugLink.Href));
             }
             catch (Exception ex)
             {
