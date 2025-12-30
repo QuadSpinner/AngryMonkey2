@@ -33,7 +33,7 @@ namespace AngryMonkey
         public static Result UpdateIcons(
             string rootDir,
             Func<string[], Dictionary<string, string>> getFrontMatter,
-            Options? options = null)
+            Options options = null)
         {
             if (string.IsNullOrWhiteSpace(rootDir))
                 throw new ArgumentException("rootDir is required.", nameof(rootDir));

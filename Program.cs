@@ -1,6 +1,7 @@
 ﻿using AngryMonkey.Objects;
 using Markdig;
 using Markdig.Extensions.AutoIdentifiers;
+using Markdig.Extensions.MediaLinks;
 using Markdig.Syntax;
 using Newtonsoft.Json;
 using Spectre.Console;
@@ -52,6 +53,12 @@ public static class Program
             .UseAutoIdentifiers(AutoIdentifierOptions.GitHub)
             .UseYamlFrontMatter()
             .UsePipeTables()
+            .UseMediaLinks(new MediaOptions()
+            {
+                Class = "border rounded ratio ratio-16x9",
+                Width = "",
+                Height = ""
+            })
             //.UseMathematics()
             .UseFigures()
             //.UseBootstrap()
@@ -104,6 +111,22 @@ public static class Program
                         Destination = @"X:\Docs\Gaea2-Docs\staging\reference",
                         ShortName = "Reference",
                         URL = "/reference"
+                    },
+                    new()
+                    {
+                        Name = "Guides",
+                        Source = @"X:\Docs\Gaea2-Docs\Source\guides",
+                        Destination = @"X:\Docs\Gaea2-Docs\staging\guides",
+                        ShortName = "Guides",
+                        URL = "/guides"
+                    },
+                    new()
+                    {
+                        Name = "Developers",
+                        Source = @"X:\Docs\Gaea2-Docs\Source\developers",
+                        Destination = @"X:\Docs\Gaea2-Docs\staging\developers",
+                        ShortName = "Developers",
+                        URL = "/developers"
                     }
         ];
 
