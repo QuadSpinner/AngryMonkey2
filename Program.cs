@@ -7,6 +7,8 @@ using Markdig.Syntax;
 using Newtonsoft.Json;
 using Spectre.Console;
 using System.Collections.Concurrent;
+using System.Text;
+using static System.Reflection.Metadata.BlobBuilder;
 
 namespace AngryMonkey;
 
@@ -37,6 +39,9 @@ public static class Program
     internal static ConcurrentBag<string> RogueAts = [];
     internal static Dictionary<string, Page> PageByDestMd = new(StringComparer.OrdinalIgnoreCase);
 
+    internal static StringBuilder LLMS = new();
+
+    internal static Dictionary<string, Flub[]> Flubs = [];
 
     public static void Main(string[] args)
     {// Synchronous
@@ -133,11 +138,14 @@ public static class Program
             CollectPages(hive);
         }
 
+        LoadFlubs();
+
         BuildSlugIndex();
 
         foreach (Hive hive in hives)
         {
             GenerateNavigation(hive);
+            //GenerateMissingFolderIndexMarkdown(hive);
             FileService.CopyDirectory(hive.Source, hive.Destination);
             ProcessMarkdown(hive);
         }
@@ -145,6 +153,7 @@ public static class Program
         FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\assets", "*.*");
         FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\js\", "*.*");
         File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
+        File.WriteAllText($"{StagingFolder}\\llms-full.txt", LLMS.ToString());
 
         AnsiConsole.MarkupLine($"[white][[{hives.Length}]][/] hives\n[white][[{Links.Count}]][/] pages\n[white][[{folderCount}]][/] sections");
 
@@ -156,6 +165,21 @@ public static class Program
         }
 
         AnsiConsole.MarkupLine("[green][[Success - oo oo aa ahh ahh!]][/] [white]The Monkey is happy.[/]");
+    }
+
+    private static void LoadFlubs()
+    {
+        var files = Directory.GetFiles($@"{RootFolder}\source\flubs", "*.json");
+
+        foreach (var file in files)
+        {
+            var flubArray = JsonConvert.DeserializeObject<Flub[]>(File.ReadAllText(file));
+            if (flubArray is { Length: > 0 })
+            {
+                var key = Path.GetFileNameWithoutExtension(file).ToLower();
+                Flubs[key] = flubArray;
+            }
+        }
     }
 
     private static AppConfig LoadConfiguration(string config)
@@ -287,15 +311,22 @@ public static class Program
 
                 content = ProcessSlugs(content);
 
-                MarkdownDocument doc = Markdown.Parse(content, pipeline);
-                string contentHTML = doc.ToHtml(pipeline);
-                html = html.Replace("%%CONTENT%%", contentHTML);
-
                 if (!PageByDestMd.TryGetValue(file, out var page))
                     throw new InvalidOperationException($"No page metadata for: {file}");
 
                 string title = page.Title;
                 string uid = page.UID;
+
+                MarkdownDocument doc = Markdown.Parse(content, pipeline);
+                string contentHTML = doc.ToHtml(pipeline);
+
+                if (Flubs.ContainsKey(uid))
+                {
+                    contentHTML += "\n" + GetFlubTable(title, Flubs[uid]);
+                }
+
+                html = html.Replace("%%CONTENT%%", contentHTML);
+
 
                 Slugs.TryGetValue(uid, out var selfLink);
                 var href = selfLink?.Href ?? file.Replace(hive.Destination, hive.URL).Replace("\\", "/").Replace(".md", ".html");
@@ -306,13 +337,15 @@ public static class Program
                     .Replace("%%SHORTNAME%%", hive.ShortName)
                     .Replace("%%HREF%%", href)
                     .Replace("%%SLUG%%", uid)
+                    .Replace("%%V%%", DateTime.Now.ToString("MM.dd.yyyy"))
                     .Replace("%%PAGETITLE%%", $"<span>{hive.Name}</span><span>{title}</span>");
-
 
                 if (content.Contains("@"))
                     RogueAts.Add(file);
 
-                SearchObjects.Add(SearchBuilder.ToSearchObject(content, title, hive, href));
+                var so = SearchBuilder.ToSearchObject(content, title, hive, href);
+                SearchObjects.Add(so);
+                LLMS.AppendLine(so.text);
 
                 File.WriteAllText(file.Replace(".md", ".html"), html);
             }
@@ -324,15 +357,89 @@ public static class Program
         });
     }
 
+    private static string GetFlubTable(string nodeName, Flub[] flubs)
+    {
+        StringBuilder sb = new();
+
+        sb.AppendLine("<table class=\"properties-table\"><tbody>");
+
+        if (flubs[0].Description != "T" && !flubs[0].IsGroup)
+        {
+            sb.AppendLine($"<tr><td colspan='2' class='head'><span class='title'>{nodeName}</span></td></tr>");
+        }
+
+        foreach (Flub flub in flubs)
+        {
+            if (flub.IsGroup)
+            {
+                sb.AppendLine($"<tr><td colspan='2' class='head'><span class='title'>{flub.Name}</span><span class='title-desc'>{flub.Description}</span></td></tr>");
+            }
+            else
+            {
+                if (flub.Flubs == null || (flub.Flubs != null && flub.Flubs.All(x => string.IsNullOrEmpty(x.Description))))
+                {
+                    sb.AppendLine($"<tr><td>{flub.Name}</td><td>{flub.Description}</td></tr>");
+                }
+                else
+                {
+                    sb.AppendLine($"<tr><td>{flub.Name}</td>" +
+                                  $"<td>{flub.Description}" +
+                                  "<div class=\"param-spacer\"></div>");
+
+                    foreach (Flub flubFlub in flub.Flubs)
+                    {
+                        sb.AppendLine($"<span class=\"choice\">{flubFlub.Name}</span>" +
+                                      $"<span class=\"choice-description\">{flubFlub.Description}</span>");
+                    }
+
+                    sb.AppendLine("</td></tr>");
+                }
+            }
+        }
+
+        sb.AppendLine("</tbody>");
+        sb.AppendLine("</table>");
+
+        return sb.ToString();
+    }
 
     private static string ProcessSlugs(string content)
     {
         foreach ((string key, Link link) in Slugs.OrderByDescending(x => x.Key.Length))
         {
-            content = content.Replace($"(@{key})", link.Href, StringComparison.OrdinalIgnoreCase);
+            content = content.Replace($"(@{key})", $"({link.Href})", StringComparison.OrdinalIgnoreCase);
             content = content.Replace($"@{key}", $"[{link.Title}]({link.Href})", StringComparison.OrdinalIgnoreCase);
         }
 
         return content;
+    }
+
+    public static void GenerateMissingFolderIndexMarkdown(Hive hive)
+    {
+        if (hive.IsHome) return;
+
+        var dirs = Directory.GetDirectories(hive.Source, "*", SearchOption.AllDirectories);
+
+        foreach (var dir in dirs)
+        {
+            var indexMd = Path.Combine(dir, "index.md");
+            if (File.Exists(indexMd))
+                continue;
+
+            var folderName = Path.GetFileName(dir);
+
+            var yaml =
+                $@"---
+title: {folderName}
+uid: {folderName}
+---
+
+# {folderName}
+
+<div id='show-sublinks'></div>
+";
+
+            File.WriteAllText(indexMd, yaml);
+        }
     }
 }

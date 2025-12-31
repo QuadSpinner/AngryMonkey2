@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Humanizer;
+using Markdig.Helpers;
 
 namespace AngryMonkey
 {
@@ -161,8 +162,9 @@ namespace AngryMonkey
                 var indexPath = Path.Combine(currentDir.FullName, indexFileName);
                 if (File.Exists(indexPath))
                 {
-                    //var meta = ReadFrontMatter(indexPath);
-                    var title = "Overview";
+                    var meta = ReadFrontMatter(indexPath);
+                    bool isAlpha = meta.Title.ToCharArray(0, 1)[0].IsAlphaUpper();
+                    var title = isAlpha ? meta.Title : "Overview";
                     var url = UrlForIndex(hiveRoot.FullName, indexPath, baseUrl);
                     items.Add(new TocItem { Title = title, Url = url });
                 }
