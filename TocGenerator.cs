@@ -168,6 +168,8 @@ namespace AngryMonkey
                 }
             }
 
+            Program.folderCount++;
+
             // ---- pages (.md excluding index.md)
             var pages = currentDir.EnumerateFiles("*.md", SearchOption.TopDirectoryOnly)
                 .Where(f => !IsHiddenOrInternal(f.Name))

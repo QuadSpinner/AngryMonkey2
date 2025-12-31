@@ -6,6 +6,7 @@ using Markdig.Extensions.MediaLinks;
 using Markdig.Syntax;
 using Newtonsoft.Json;
 using Spectre.Console;
+using System.Collections.Concurrent;
 
 namespace AngryMonkey;
 
@@ -20,6 +21,7 @@ public static class Program
     public static string Templates;
     public static string HtmlTemplate;
     public static string Html;
+    public static int folderCount;
     public static MarkdownPipeline pipeline;
 
     //private static Dictionary<string, string> TOC = [];
@@ -29,10 +31,12 @@ public static class Program
 
     internal static List<Page> Pages = [];
 
-    internal static List<SearchObject> SearchObjects = [];
-
     internal static Dictionary<string, Link> Slugs = [];
-    internal static List<string> RogueAts = [];
+
+    internal static ConcurrentBag<SearchObject> SearchObjects = [];
+    internal static ConcurrentBag<string> RogueAts = [];
+    internal static Dictionary<string, Page> PageByDestMd = new(StringComparer.OrdinalIgnoreCase);
+
 
     public static void Main(string[] args)
     {// Synchronous
@@ -48,7 +52,7 @@ public static class Program
             }
             else
             {
-                AnsiConsole.MarkupLine("[red]Configuration file not found![/] Pass the config file as the second argument.");
+                AnsiConsole.MarkupLine("[red]Configuration file not found![/] The Monkey is angry!");
                 return;
             }
         }
@@ -73,7 +77,7 @@ public static class Program
 
         if (config == "")
         {
-            AnsiConsole.MarkupLine("[red]Configuration file not found![/] Pass the config file as the second argument.");
+            AnsiConsole.MarkupLine("[red]Configuration file not found![/] The Monkey is angry!");
             return;
         }
 
@@ -89,7 +93,7 @@ public static class Program
         {
             AnsiConsole.WriteLine();
             FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\assets", "*.*");
-            AnsiConsole.MarkupLine("[white]The Monkey copied assets only[/] [Fuchsia][[shows teeth]][/]");
+            AnsiConsole.MarkupLine("[Fuchsia][[shows teeth]][/] [white]The Monkey copied assets only[/]");
             return;
         }
 
@@ -142,14 +146,16 @@ public static class Program
         FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\js\", "*.*");
         File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
 
-        if (RogueAts.Any())
+        AnsiConsole.MarkupLine($"[white][[{hives.Length}]][/] hives\n[white][[{Links.Count}]][/] pages\n[white][[{folderCount}]][/] sections");
+
+        if (!RogueAts.IsEmpty)
         {
-            AnsiConsole.MarkupLine($"[DarkOrange] {RogueAts.Count} rogue @s found![/] See RogueAts.txt");
-            File.WriteAllText($"{RootFolder}\\rogueAts.txt", string.Join(Environment.NewLine, RogueAts.Distinct()));
+            var distinct = RogueAts.Distinct().ToArray();
+            AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue @s found! See RogueAts.txt");
+            File.WriteAllText($"{RootFolder}\\rogueAts.txt", string.Join(Environment.NewLine, distinct));
         }
 
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[white]The Monkey is happy.[/] [green][[Success - oo oo aa ahh ahh!]][/]");
+        AnsiConsole.MarkupLine("[green][[Success - oo oo aa ahh ahh!]][/] [white]The Monkey is happy.[/]");
     }
 
     private static AppConfig LoadConfiguration(string config)
@@ -204,6 +210,8 @@ public static class Program
                 };
 
                 Pages.Add(page);
+                var destMd = file.Replace(hive.Source, hive.Destination);
+                PageByDestMd[destMd] = page;
 
                 var link = new Link(page.Link, title, yaml["uid"]);
                 Links.Add(link);
@@ -226,9 +234,11 @@ public static class Program
             AnsiConsole.WriteLine("DUPLICATES:");
             foreach (string duplicateSlug in duplicateSlugs)
             {
-                AnsiConsole.WriteLine(duplicateSlug);
+                AnsiConsole.WriteLine(" - " + duplicateSlug);
             }
-            throw new Exception("Duplicate slugs found");
+
+            AnsiConsole.MarkupLine($"[red][[{duplicateSlugs.Count}]] duplicate slugs found![/] The Monkey is angry!");
+            Environment.Exit(50);
         }
 
         Slugs = Links.ToDictionary(x => x.Slug);
@@ -241,6 +251,7 @@ public static class Program
             File.WriteAllText($@"{RootFolder}\Hives\TOC_{hive.ShortName}.js", "window.SITE_TOC = null;");
             return;
         }
+
         TocGenerator.WriteHiveTocJs(hive.Source, hive.URL, $@"{RootFolder}\Hives\TOC_{hive.ShortName}.js");
     }
 
@@ -257,52 +268,62 @@ public static class Program
 
     public static void ProcessMarkdown(Hive hive)
     {
-        string[] md = Directory.GetFiles(hive.Destination, "*.md", hive.IsHome ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories);
+        string[] md = Directory.GetFiles(
+            hive.Destination, "*.md",
+            hive.IsHome ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories);
 
-        foreach (var file in md)
+        var po = new ParallelOptions
         {
-            string html = Html;
+            MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1) // tweak as you like
+        };
 
-            string content = File.ReadAllText(file);
-
-            content = ProcessSlugs(content);
-
-            MarkdownDocument doc = Markdown.Parse(content, pipeline);
-
-            string contentHTML = doc.ToHtml(pipeline);
-            html = html.Replace("%%CONTENT%%", contentHTML);
-
+        Parallel.ForEach(md, po, file =>
+        {
             try
             {
-                var splitter = content.Contains("\r\n") ? Environment.NewLine : "\n";
-                var dic = FrontMatter.GetFrontMatter(content.Split(splitter));
-                string title = dic["title"];
+                string html = Html;
+
+                string content = File.ReadAllText(file); // keep raw content
+
+                content = ProcessSlugs(content);
+
+                MarkdownDocument doc = Markdown.Parse(content, pipeline);
+                string contentHTML = doc.ToHtml(pipeline);
+                html = html.Replace("%%CONTENT%%", contentHTML);
+
+                if (!PageByDestMd.TryGetValue(file, out var page))
+                    throw new InvalidOperationException($"No page metadata for: {file}");
+
+                string title = page.Title;
+                string uid = page.UID;
+
+                Slugs.TryGetValue(uid, out var selfLink);
+                var href = selfLink?.Href ?? file.Replace(hive.Destination, hive.URL).Replace("\\", "/").Replace(".md", ".html");
 
                 html = html.Replace("%%TITLE%%", title)
                     .Replace("%%HIVE%%", hive.Name)
+                    .Replace("%%HIVEPATH%%", hive.URL)
                     .Replace("%%SHORTNAME%%", hive.ShortName)
-                    .Replace("%%SLUG%%", dic["uid"])
+                    .Replace("%%HREF%%", href)
+                    .Replace("%%SLUG%%", uid)
                     .Replace("%%PAGETITLE%%", $"<span>{hive.Name}</span><span>{title}</span>");
 
+
                 if (content.Contains("@"))
-                {
                     RogueAts.Add(file);
-                }
 
-                if (!Slugs.TryGetValue(dic["uid"], out var slugLink))
-                    slugLink = new Link(hive.URL, title, dic["uid"]); // fallback (or page.Link if you have it)
+                SearchObjects.Add(SearchBuilder.ToSearchObject(content, title, hive, href));
 
-                SearchObjects.Add(SearchBuilder.ToSearchObject(content, title, hive, slugLink.Href));
+                File.WriteAllText(file.Replace(".md", ".html"), html);
             }
             catch (Exception ex)
             {
                 Console.WriteLine(file);
                 Console.WriteLine(ex.Message);
             }
-
-            File.WriteAllText(file.Replace(".md", ".html"), html);
-        }
+        });
     }
+
 
     private static string ProcessSlugs(string content)
     {
