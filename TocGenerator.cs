@@ -27,7 +27,7 @@ namespace AngryMonkey
             string baseUrl,
             string manifestFileName = "folders.txt",
             string indexFileName = "index.md",
-            bool indented = true)
+            bool indented = false)
         {
             var toc = GenerateHiveToc(hiveRootDir, baseUrl, manifestFileName, indexFileName);
 
@@ -50,7 +50,7 @@ namespace AngryMonkey
             string jsVarPath = "window.SITE_TOC",
             string manifestFileName = "folders.txt",
             string indexFileName = "index.md",
-            bool indented = true)
+            bool indented = false)
         {
             var json = GenerateHiveTocJson(hiveRootDir, baseUrl, manifestFileName, indexFileName, indented);
 

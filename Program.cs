@@ -1,4 +1,5 @@
-﻿using AngryMonkey.Objects;
+﻿using AngleSharp.Html;
+using AngryMonkey.Objects;
 using AngryMonkey.POCO;
 using Markdig;
 using Markdig.Extensions.AutoIdentifiers;
@@ -8,7 +9,7 @@ using Newtonsoft.Json;
 using Spectre.Console;
 using System.Collections.Concurrent;
 using System.Text;
-using static System.Reflection.Metadata.BlobBuilder;
+using System.Text.RegularExpressions;
 
 namespace AngryMonkey;
 
@@ -42,6 +43,8 @@ public static class Program
     internal static StringBuilder LLMS = new();
 
     internal static Dictionary<string, Flub[]> Flubs = [];
+
+    private static readonly Regex AtToken = new Regex(@"(?<!\w)@([A-Za-z][A-Za-z0-9_-]*)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public static void Main(string[] args)
     {// Synchronous
@@ -154,6 +157,7 @@ public static class Program
         FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\js\", "*.*");
         File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
         File.WriteAllText($"{StagingFolder}\\llms-full.txt", LLMS.ToString());
+        File.WriteAllText($"{RootFolder}\\.vscode\\atlinks.json", JsonConvert.SerializeObject(Links));
 
         AnsiConsole.MarkupLine($"[white][[{hives.Length}]][/] hives\n[white][[{Links.Count}]][/] pages\n[white][[{folderCount}]][/] sections");
 
@@ -327,7 +331,6 @@ public static class Program
 
                 html = html.Replace("%%CONTENT%%", contentHTML);
 
-
                 Slugs.TryGetValue(uid, out var selfLink);
                 var href = selfLink?.Href ?? file.Replace(hive.Destination, hive.URL).Replace("\\", "/").Replace(".md", ".html");
 
@@ -340,7 +343,7 @@ public static class Program
                     .Replace("%%V%%", DateTime.Now.ToString("MM.dd.yyyy"))
                     .Replace("%%PAGETITLE%%", $"<span>{hive.Name}</span><span>{title}</span>");
 
-                if (content.Contains("@"))
+                if (AtToken.IsMatch(content))
                     RogueAts.Add(file);
 
                 var so = SearchBuilder.ToSearchObject(content, title, hive, href);
