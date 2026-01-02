@@ -16,6 +16,10 @@ namespace AngryMonkey
             cfg.StagingRoot = MakePath(cfg.RootFolder, cfg.StagingRoot);
             cfg.TemplatesFolder = MakePath(cfg.RootFolder, cfg.TemplatesFolder);
             cfg.HtmlTemplate = MakePath(cfg.RootFolder, cfg.HtmlTemplate);
+            for (int i = 0; i < cfg.DataFolders.Length; i++)
+            {
+                cfg.DataFolders[i] = MakePath(cfg.SourceRoot, cfg.DataFolders[i]);
+            }
 
             return cfg;
         }

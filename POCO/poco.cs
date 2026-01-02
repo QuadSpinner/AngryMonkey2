@@ -7,6 +7,8 @@
         public string StagingRoot { get; set; } = "staging";
         public string TemplatesFolder { get; set; } = "template";
         public string HtmlTemplate { get; set; } = "template\\template.html";
+
+        public string[] DataFolders { get; set; } = [];
         public List<HiveConfig> Hives { get; set; } = new();
     }
 

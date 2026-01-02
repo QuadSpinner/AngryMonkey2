@@ -33,6 +33,7 @@ public static class Program
     internal static List<Link> Links = [];
 
     internal static List<Page> Pages = [];
+    internal static string[] DataFolders = [];
 
     internal static Dictionary<string, Link> Slugs = [];
 
@@ -43,6 +44,8 @@ public static class Program
     internal static StringBuilder LLMS = new();
 
     internal static Dictionary<string, Flub[]> Flubs = [];
+
+    internal static bool Fast { get; set; } = false;
 
     private static readonly Regex AtToken = new Regex(@"(?<!\w)@([A-Za-z][A-Za-z0-9_-]*)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -65,23 +68,23 @@ public static class Program
             }
         }
 
-        if (args.Length > 1)
-        {
-            if (File.Exists(args[1]))
-            {
-                config = args[1];
-            }
-            else
-            {
-                if (Directory.Exists(args[1]))
-                {
-                    if (File.Exists(args[1] + "\\hives.json"))
-                    {
-                        config = args[1] + "\\hives.json";
-                    }
-                }
-            }
-        }
+        //if (args.Length > 0)
+        //{
+        //    if (File.Exists(args[0]))
+        //    {
+        //        config = args[0];
+        //    }
+        //    else
+        //    {
+        //        if (Directory.Exists(args[0]))
+        //        {
+        //            if (File.Exists(args[0] + "\\hives.json"))
+        //            {
+        //                config = args[0] + "\\hives.json";
+        //            }
+        //        }
+        //    }
+        //}
 
         if (config == "")
         {
@@ -91,11 +94,17 @@ public static class Program
 
         AppConfig cfg = LoadConfiguration(config);
 
+        DataFolders = cfg.DataFolders;
         Hive[] hives = Config.BuildHives(cfg);
 
         //if (Directory.Exists(StagingFolder))
         //    Directory.Delete(StagingFolder, true);
         //Directory.CreateDirectory(StagingFolder);
+
+        if (args.Any(a => string.Equals(a, "--fast", StringComparison.OrdinalIgnoreCase)))
+        {
+            Fast = true;
+        }
 
         if (args.Any(a => string.Equals(a, "--assets", StringComparison.OrdinalIgnoreCase)))
         {
@@ -155,6 +164,16 @@ public static class Program
 
         FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\assets", "*.*");
         FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\js\", "*.*");
+
+        if (!Fast)
+        {
+            AnsiConsole.WriteLine("Copying Data Folders...");
+            foreach (string dataFolder in DataFolders)
+            {
+                FileService.CopyAll(dataFolder, dataFolder.Replace(cfg.SourceRoot, cfg.StagingRoot));
+            }
+        }
+
         File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
         File.WriteAllText($"{StagingFolder}\\llms-full.txt", LLMS.ToString());
         File.WriteAllText($"{RootFolder}\\.vscode\\atlinks.json", JsonConvert.SerializeObject(Links));
