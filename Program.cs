@@ -1,6 +1,6 @@
-﻿using AngleSharp.Html;
-using AngryMonkey.Objects;
+﻿using AngryMonkey.Objects;
 using AngryMonkey.POCO;
+using Humanizer;
 using Markdig;
 using Markdig.Extensions.AutoIdentifiers;
 using Markdig.Extensions.MediaLinks;
@@ -10,6 +10,7 @@ using Spectre.Console;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.RegularExpressions;
+using Markdig.Helpers;
 
 namespace AngryMonkey;
 
@@ -44,6 +45,7 @@ public static class Program
     internal static StringBuilder LLMS = new();
 
     internal static Dictionary<string, Flub[]> Flubs = [];
+    internal static Dictionary<string, NodeMetadata> Meta = [];
 
     internal static bool Fast { get; set; } = false;
 
@@ -151,6 +153,7 @@ public static class Program
         }
 
         LoadFlubs();
+        LoadMetadata();
 
         BuildSlugIndex();
 
@@ -158,7 +161,9 @@ public static class Program
         {
             GenerateNavigation(hive);
             //GenerateMissingFolderIndexMarkdown(hive);
-            FileService.CopyDirectory(hive.Source, hive.Destination);
+            if (!hive.IsHome)
+                FileService.CopyDirectory(hive.Source, hive.Destination);
+
             ProcessMarkdown(hive);
         }
 
@@ -192,15 +197,41 @@ public static class Program
 
     private static void LoadFlubs()
     {
-        var files = Directory.GetFiles($@"{RootFolder}\source\flubs", "*.json");
+        var files = Directory.GetFiles($@"{RootFolder}\source\.flubs", "*.json");
 
         foreach (var file in files)
         {
-            var flubArray = JsonConvert.DeserializeObject<Flub[]>(File.ReadAllText(file));
-            if (flubArray is { Length: > 0 })
+            try
             {
+                var flubArray = JsonConvert.DeserializeObject<Flub[]>(File.ReadAllText(file));
+                if (flubArray is { Length: > 0 })
+                {
+                    var key = Path.GetFileNameWithoutExtension(file).ToLower();
+                    Flubs[key] = flubArray;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(file);
+            }
+        }
+    }
+
+    private static void LoadMetadata()
+    {
+        var files = Directory.GetFiles($@"{RootFolder}\source\.meta", "*.json");
+
+        foreach (var file in files)
+        {
+            try
+            {
+                var flubArray = JsonConvert.DeserializeObject<NodeMetadata>(File.ReadAllText(file));
                 var key = Path.GetFileNameWithoutExtension(file).ToLower();
-                Flubs[key] = flubArray;
+                Meta[key] = flubArray;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(file);
             }
         }
     }
@@ -340,12 +371,21 @@ public static class Program
                 string title = page.Title;
                 string uid = page.UID;
 
+                content = HtmlProcessors.ExpandIncludes(content, $@"{RootFolder}\Source", 2, false);
+
                 MarkdownDocument doc = Markdown.Parse(content, pipeline);
                 string contentHTML = doc.ToHtml(pipeline);
 
                 if (Flubs.ContainsKey(uid))
                 {
-                    contentHTML += "\n" + GetFlubTable(title, Flubs[uid]);
+                    contentHTML += "\n" + HtmlProcessors.GetFlubTable(title, Flubs[uid]);
+                }
+
+                string nodeData = "<hr>";
+
+                if (Meta.ContainsKey(uid))
+                {
+                    nodeData = Markdown.ToHtml(HtmlProcessors.ExpandIncludes(GetNodeData(Meta[uid]), $@"{RootFolder}\Source", 2, false), pipeline);
                 }
 
                 html = html.Replace("%%CONTENT%%", contentHTML);
@@ -353,14 +393,15 @@ public static class Program
                 Slugs.TryGetValue(uid, out var selfLink);
                 var href = selfLink?.Href ?? file.Replace(hive.Destination, hive.URL).Replace("\\", "/").Replace(".md", ".html");
 
-                html = html.Replace("%%TITLE%%", title)
+                html = html.Replace("%%TITLE%%", title[0].IsAlphaUpper() ? title : title.Humanize(LetterCasing.Title))
                     .Replace("%%HIVE%%", hive.Name)
                     .Replace("%%HIVEPATH%%", hive.URL)
                     .Replace("%%SHORTNAME%%", hive.ShortName)
                     .Replace("%%HREF%%", href)
+                    .Replace("%%NODEDATA%%", nodeData)
                     .Replace("%%SLUG%%", uid)
-                    .Replace("%%V%%", DateTime.Now.ToString("MM.dd.yyyy"))
-                    .Replace("%%PAGETITLE%%", $"<span>{hive.Name}</span><span>{title}</span>");
+                    .Replace("%%V%%", DateTime.Now.ToString("MM.dd.yyyy"));
+                //.Replace("%%PAGETITLE%%", $"<span>{hive.Name}</span><span>{title}</span>");
 
                 if (AtToken.IsMatch(content))
                     RogueAts.Add(file);
@@ -379,49 +420,21 @@ public static class Program
         });
     }
 
-    private static string GetFlubTable(string nodeName, Flub[] flubs)
+    private static string GetNodeData(NodeMetadata m)
     {
         StringBuilder sb = new();
 
-        sb.AppendLine("<table class=\"properties-table\"><tbody>");
+        sb.AppendLine($"<div class='node-info d-flex justify-content-between'>");
+        sb.AppendLine($"    <div class='toolbox d-flex'>{m.Toolbox} › {m.Family}</div>");
+        sb.AppendLine($"    <div class='shortcut d-flex'>Shortcode <kbd>{m.ShortCode}</kbd></div>");
+        sb.AppendLine($"</div>");
+        sb.AppendLine($"<span class='description'>{m.Description}</span>");
 
-        if (flubs[0].Description != "T" && !flubs[0].IsGroup)
-        {
-            sb.AppendLine($"<tr><td colspan='2' class='head'><span class='title'>{nodeName}</span></td></tr>");
-        }
+        if (m.AccumulationType != null) sb.AppendLine($"<div class='accumulation'>{m.AccumulationType}</div>");
+        if (m.CanCreatePorts) sb.AppendLine("\n{% include \"/.data/includes/add-ports.md\" %}\n");
+        if (m.RequiresBaking) sb.AppendLine("\n{% include \"/.data/includes/must-be-baked.md\" %}\n");
 
-        foreach (Flub flub in flubs)
-        {
-            if (flub.IsGroup)
-            {
-                sb.AppendLine($"<tr><td colspan='2' class='head'><span class='title'>{flub.Name}</span><span class='title-desc'>{flub.Description}</span></td></tr>");
-            }
-            else
-            {
-                if (flub.Flubs == null || (flub.Flubs != null && flub.Flubs.All(x => string.IsNullOrEmpty(x.Description))))
-                {
-                    sb.AppendLine($"<tr><td>{flub.Name}</td><td>{flub.Description}</td></tr>");
-                }
-                else
-                {
-                    sb.AppendLine($"<tr><td>{flub.Name}</td>" +
-                                  $"<td>{flub.Description}" +
-                                  "<div class=\"param-spacer\"></div>");
-
-                    foreach (Flub flubFlub in flub.Flubs)
-                    {
-                        sb.AppendLine($"<span class=\"choice\">{flubFlub.Name}</span>" +
-                                      $"<span class=\"choice-description\">{flubFlub.Description}</span>");
-                    }
-
-                    sb.AppendLine("</td></tr>");
-                }
-            }
-        }
-
-        sb.AppendLine("</tbody>");
-        sb.AppendLine("</table>");
-
+        sb.AppendLine("<hr>");
         return sb.ToString();
     }
 
@@ -451,15 +464,17 @@ public static class Program
             var folderName = Path.GetFileName(dir);
 
             var yaml =
-                $@"---
-title: {folderName}
-uid: {folderName}
----
+                $"""
+                 ---
+                 title: {folderName}
+                 uid: {folderName}
+                 ---
 
-# {folderName}
+                 # {folderName}
 
-<div id='show-sublinks'></div>
-";
+                 <div id='show-sublinks'></div>
+
+                 """;
 
             File.WriteAllText(indexMd, yaml);
         }

@@ -166,7 +166,7 @@ namespace AngryMonkey
                     bool isAlpha = meta.Title.ToCharArray(0, 1)[0].IsAlphaUpper();
                     var title = isAlpha ? meta.Title : "Overview";
                     var url = UrlForIndex(hiveRoot.FullName, indexPath, baseUrl);
-                    items.Add(new TocItem { Title = title, Url = url });
+                    items.Add(new TocItem { Title = title, Url = url, Icon = meta.Icon });
                 }
             }
 
