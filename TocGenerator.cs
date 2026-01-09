@@ -85,6 +85,7 @@ namespace AngryMonkey
                 hiveRoot: root,
                 currentDir: root,
                 baseUrl: baseUrl,
+                folderTitle: "",
                 manifestFileName: manifestFileName,
                 indexFileName: indexFileName,
                 includeIndexAsFirstChild: true);
@@ -106,6 +107,8 @@ namespace AngryMonkey
 
             [JsonPropertyName("section")]
             public bool? Section { get; set; }
+            [JsonPropertyName("hidden")]
+            public bool? Hidden { get; set; }
 
             [JsonPropertyName("children")]
             public List<TocItem> Children { get; set; }
@@ -133,6 +136,7 @@ namespace AngryMonkey
                 hiveRoot: hiveRoot,
                 currentDir: dir,
                 baseUrl: baseUrl,
+                folderTitle: title,
                 manifestFileName: manifestFileName,
                 indexFileName: indexFileName,
                 includeIndexAsFirstChild: true);
@@ -146,10 +150,10 @@ namespace AngryMonkey
         }
 
 
-        private static List<TocItem> BuildFolderChildren(
-            DirectoryInfo hiveRoot,
+        private static List<TocItem> BuildFolderChildren(DirectoryInfo hiveRoot,
             DirectoryInfo currentDir,
             string baseUrl,
+            string folderTitle,
             string manifestFileName,
             string indexFileName,
             bool includeIndexAsFirstChild)
@@ -163,10 +167,11 @@ namespace AngryMonkey
                 if (File.Exists(indexPath))
                 {
                     var meta = ReadFrontMatter(indexPath);
-                    bool isAlpha = meta.Title.ToCharArray(0, 1)[0].IsAlphaUpper();
-                    var title = isAlpha ? meta.Title : "Overview";
+                    // bool isAlpha = meta.Title.ToCharArray(0, 1)[0].IsAlphaUpper();
+                    var title = !string.Equals(meta.Title, folderTitle, StringComparison.CurrentCultureIgnoreCase) ? meta.Title : "Overview";
                     var url = UrlForIndex(hiveRoot.FullName, indexPath, baseUrl);
-                    items.Add(new TocItem { Title = title, Url = url, Icon = meta.Icon });
+
+                    items.Add(new TocItem { Title = title, Url = url, Icon = meta.Icon, Hidden = meta.Hidden });
                 }
             }
 
@@ -185,9 +190,11 @@ namespace AngryMonkey
                         Title = meta.Title ?? ToTitle(Path.GetFileNameWithoutExtension(f.Name)),
                         meta.Order,
                         meta.Section,
-                        meta.Icon
+                        meta.Icon,
+                        meta.Hidden
                     };
                 })
+                .Where(x => x.Hidden is null or false)
                 .OrderBy(x => x.Order)
                 .ThenBy(x => x.Title, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => x.File.Name, StringComparer.OrdinalIgnoreCase)
@@ -196,7 +203,8 @@ namespace AngryMonkey
                     Title = x.Title,
                     Url = UrlForPage(hiveRoot.FullName, x.File.FullName, baseUrl),
                     Section = x.Section,
-                    Icon = x.Icon
+                    Icon = x.Icon,
+                    Hidden = x.Hidden
                 });
 
             items.AddRange(pages);
@@ -311,6 +319,7 @@ namespace AngryMonkey
             public string Icon { get; init; }
             public int Order { get; init; }
             public bool? Section { get; init; }
+            public bool? Hidden { get; init; }
         }
 
         private static PageMeta ReadFrontMatter(string mdPath)
@@ -321,6 +330,7 @@ namespace AngryMonkey
             fm.TryGetValue("order", out var orderStr);
             fm.TryGetValue("icon", out var iconStr);
             bool? section = fm.ContainsKey("section") ? true : null;
+            bool? hidden = fm.ContainsKey("hidden") ? true : null;
 
             if (string.IsNullOrWhiteSpace(title))
                 title = null;
@@ -330,7 +340,7 @@ namespace AngryMonkey
                 int.TryParse(orderStr.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
                 order = n;
 
-            return new PageMeta { Title = title, Order = order, Section = section, Icon = iconStr };
+            return new PageMeta { Title = title, Order = order, Section = section, Icon = iconStr, Hidden = hidden };
         }
 
         // -----------------------------

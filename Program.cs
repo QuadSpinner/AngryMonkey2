@@ -1,16 +1,13 @@
 ﻿using AngryMonkey.Objects;
 using AngryMonkey.POCO;
-using Humanizer;
 using Markdig;
 using Markdig.Extensions.AutoIdentifiers;
 using Markdig.Extensions.MediaLinks;
-using Markdig.Syntax;
 using Newtonsoft.Json;
 using Spectre.Console;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.RegularExpressions;
-using Markdig.Helpers;
 
 namespace AngryMonkey;
 
@@ -149,6 +146,7 @@ public static partial class Program
 
         foreach (Hive hive in hives)
         {
+            //GenerateMissingFolderIndexMarkdown(hive);
             CollectPages(hive);
         }
 
@@ -160,7 +158,6 @@ public static partial class Program
         foreach (Hive hive in hives)
         {
             GenerateNavigation(hive);
-            //GenerateMissingFolderIndexMarkdown(hive);
             if (!hive.IsHome)
                 FileService.CopyDirectory(hive.Source, hive.Destination);
 
@@ -284,7 +281,7 @@ public static partial class Program
                     Icon = yaml.ContainsKey("icon") ? yaml["icon"] : null,
                     Title = yaml["title"],
                     UID = yaml["uid"],
-                    Hidden = yaml.ContainsKey("show") && yaml["show"] == "no",
+                    Hidden = yaml.ContainsKey("hidden") && yaml["hidden"] == "true",
                     StartsSection = yaml.ContainsKey("section") && yaml["section"] == "true"
                 };
 
@@ -292,7 +289,7 @@ public static partial class Program
                 var destMd = file.Replace(hive.Source, hive.Destination);
                 PageByDestMd[destMd] = page;
 
-                var link = new Link(page.Link, title, page.UID, page.Icon);
+                var link = new Link(page.Link, title, page.UID, page.Icon, page.Hidden);
                 Links.Add(link);
             }
             catch (Exception ex)

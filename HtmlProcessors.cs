@@ -98,7 +98,7 @@ namespace AngryMonkey
                         md.AppendLine($"|{flub.Name}|{flub.Description}|");
                         foreach (Flub flubFlub in flub.Flubs)
                         {
-                            sb.AppendLine($"<span class=\"choice\">{flubFlub.Name.Humanize(LetterCasing.Title)}</span>" +
+                            sb.AppendLine($"<span class=\"choice\">{icon} {flubFlub.Name.Humanize(LetterCasing.Title)}</span>" +
                                           $"<span class=\"choice-description\">{flubFlub.Description}</span>");
                             md.AppendLine($"|{flubFlub.Name}|{flubFlub.Description}|");
 

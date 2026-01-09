@@ -170,6 +170,7 @@ public static partial class Program
                  ---
                  title: {folderName.Humanize(LetterCasing.Title)}
                  uid: {folderName}
+                 hidden: true
                  ---
 
                  # In this section
