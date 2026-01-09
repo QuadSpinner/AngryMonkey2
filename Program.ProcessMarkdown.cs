@@ -28,7 +28,6 @@ public static partial class Program
             {
                 string html = Html;
 
-
                 if (Path.GetFileNameWithoutExtension(file) == "node-map")
                 {
                     File.WriteAllText(file, HtmlProcessors.GetNodeMap(Meta.Values.ToArray()));
@@ -60,9 +59,14 @@ public static partial class Program
 
                 string contentHTML = doc.ToHtml(pipeline);
 
+                string flubTable = "";
+
                 if (Flubs.ContainsKey(uid))
                 {
-                    contentHTML += "\n" + HtmlProcessors.GetFlubTable(title, Flubs[uid]);
+                    (string htmlTable, string mdTable) = HtmlProcessors.GetFlubTable(title, Flubs[uid]);
+                    contentHTML += "\n" + htmlTable;
+
+                    flubTable = mdTable;
                 }
 
                 string nodeData = "<hr>";
@@ -74,8 +78,6 @@ public static partial class Program
                     nodeFamily = Meta[uid].Family;
                     nodeCategory = Meta[uid].Toolbox;
                 }
-
-
 
                 html = html.Replace("%%CONTENT%%", contentHTML);
 
@@ -99,7 +101,13 @@ public static partial class Program
 
                 var so = SearchBuilder.ToSearchObject(content, title, hive, href);
                 SearchObjects.Add(so);
+                LLMS.AppendLine("\n---");
+                LLMS.AppendLine(uid);
+                LLMS.AppendLine(title);
+                LLMS.AppendLine("\n---\n");
                 LLMS.AppendLine(so.text);
+                LLMS.AppendLine(flubTable);
+                LLMS.AppendLine("\n***\n");
 
                 File.WriteAllText(file.Replace(".md", ".html"), html);
             }
@@ -134,7 +142,7 @@ public static partial class Program
         foreach ((string key, Link link) in Slugs.OrderByDescending(x => x.Key.Length))
         {
             content = content.Replace($"(@{key})", $"({link.Href})", StringComparison.OrdinalIgnoreCase);
-            content = content.Replace($"@{key}", $"[{link.Title}]({link.Href})", StringComparison.OrdinalIgnoreCase);
+            content = content.Replace($"@{key}", $"[{link.Title}]({link.Href}){{data-link-icon='{link.Icon}'}}", StringComparison.OrdinalIgnoreCase);
         }
 
         return content;
@@ -150,18 +158,21 @@ public static partial class Program
         {
             var indexMd = Path.Combine(dir, "index.md");
             if (File.Exists(indexMd))
-                continue;
+            {
+                if (!File.ReadAllText(indexMd).Contains("show-sublinks"))
+                    continue;
+            }
 
             var folderName = Path.GetFileName(dir);
 
             var yaml =
                 $"""
                  ---
-                 title: {folderName}
+                 title: {folderName.Humanize(LetterCasing.Title)}
                  uid: {folderName}
                  ---
 
-                 # {folderName}
+                 # In this section
 
                  <div id='show-sublinks'></div>
 

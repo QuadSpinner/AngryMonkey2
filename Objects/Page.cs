@@ -12,6 +12,7 @@
         public Dictionary<string, string> Sublinks { get; set; } = [];
 
         public string UID { get; set; }
+        public string Icon { get; set; }
 
         public Hive Hive { get; set; }
 

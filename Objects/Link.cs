@@ -2,7 +2,7 @@
 
 namespace AngryMonkey
 {
-    public class Link(string href = "", string title = "", string slug = "")
+    public class Link(string href = "", string title = "", string slug = "", string icon = "")
     {
         [JsonProperty("title")]
         public string Title { get; set; } = title;
@@ -12,7 +12,9 @@ namespace AngryMonkey
 
         [JsonProperty("slug")]
         public string Slug { get; set; } = slug;
+        [JsonProperty("icon")]
+        public string Icon { get; set; } = icon;
 
-        public override string ToString() => $"{Href} | {Title} | {Slug}";
+        public override string ToString() => $"{Href} | {Title} | {Slug} | {Icon}";
     }
 }

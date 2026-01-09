@@ -50,13 +50,17 @@ namespace AngryMonkey
         }
 
 
-        internal static string GetFlubTable(string nodeName, Flub[] flubs)
+        internal static (string, string) GetFlubTable(string nodeName, Flub[] flubs)
         {
             Flub[] normals = flubs.Where(x => x.Type != "Command").ToArray();
             Flub[] commands = flubs.Where(x => x.Type == "Command").ToArray();
 
             string icon = "";
             StringBuilder sb = new();
+            StringBuilder md = new();
+
+            md.AppendLine("| Property | Description |");
+            md.AppendLine("| --- | --- |");
 
             sb.AppendLine("<table class=\"properties-table\"><tbody>");
 
@@ -76,12 +80,14 @@ namespace AngryMonkey
                 if (flub.IsGroup)
                 {
                     sb.AppendLine($"<tr><td colspan='2' class='head'><span class='title'>{flub.Name.Humanize(LetterCasing.Title)}</span><span class='title-desc'>{flub.Description}</span></td></tr>");
+                    md.AppendLine($"|{flub.Name}|{flub.Description}|");
                 }
                 else
                 {
                     if (flub.Flubs == null || (flub.Flubs != null && flub.Flubs.All(x => string.IsNullOrEmpty(x.Description))))
                     {
                         sb.AppendLine($"<tr><td data-type='{flub.Type}'>{icon} {flub.Name.Humanize(LetterCasing.Title)}</td><td>{flub.Description}</td></tr>");
+                        md.AppendLine($"|{flub.Name}|{flub.Description}|");
                     }
                     else
                     {
@@ -89,10 +95,13 @@ namespace AngryMonkey
                                       $"<td>{flub.Description}" +
                                       "<div class=\"param-spacer\"></div>");
 
+                        md.AppendLine($"|{flub.Name}|{flub.Description}|");
                         foreach (Flub flubFlub in flub.Flubs)
                         {
                             sb.AppendLine($"<span class=\"choice\">{flubFlub.Name.Humanize(LetterCasing.Title)}</span>" +
                                           $"<span class=\"choice-description\">{flubFlub.Description}</span>");
+                            md.AppendLine($"|{flubFlub.Name}|{flubFlub.Description}|");
+
                         }
 
                         sb.AppendLine("</td></tr>");
@@ -109,13 +118,14 @@ namespace AngryMonkey
                     icon = parameterIcons["Command"];
 
                     sb.AppendLine($"<tr><td data-type='{command.Type}'>{icon} {command.Name.Humanize(LetterCasing.Title)}</td><td>{command.Description}</td></tr>");
+                    md.AppendLine($"| Command: {command.Name} | {command.Description}");
                 }
             }
 
             sb.AppendLine("</tbody>");
             sb.AppendLine("</table>");
 
-            return sb.ToString();
+            return (sb.ToString(), md.ToString());
         }
 
         private static readonly Dictionary<string, string> parameterIcons = new()

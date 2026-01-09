@@ -281,6 +281,7 @@ public static partial class Program
                     Hive = hive,
                     Link = file.Replace(hive.Source, hive.URL).Replace("\\", "/").Replace(".md", ".html"),
                     //Contents = File.ReadAllText(file),
+                    Icon = yaml.ContainsKey("icon") ? yaml["icon"] : null,
                     Title = yaml["title"],
                     UID = yaml["uid"],
                     Hidden = yaml.ContainsKey("show") && yaml["show"] == "no",
@@ -291,7 +292,7 @@ public static partial class Program
                 var destMd = file.Replace(hive.Source, hive.Destination);
                 PageByDestMd[destMd] = page;
 
-                var link = new Link(page.Link, title, yaml["uid"]);
+                var link = new Link(page.Link, title, page.UID, page.Icon);
                 Links.Add(link);
             }
             catch (Exception ex)
