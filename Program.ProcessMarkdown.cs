@@ -11,6 +11,7 @@ namespace AngryMonkey;
 
 public static partial class Program
 {
+    public static List<string> imgs = [];
     public static void ProcessMarkdown(Hive hive)
     {
         string[] md = Directory.GetFiles(
@@ -72,6 +73,28 @@ public static partial class Program
                     flubTable = mdTable;
                 }
 
+                {
+                    string siteRoot = StagingFolder; // where "/assets/..." actually lives
+
+                    string Mapper(string mdPath, string url)
+                    {
+                        if (url.StartsWith("/", StringComparison.Ordinal)) return Path.GetFullPath(Path.Combine(siteRoot, url.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)));
+
+                        return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(mdPath)!, url.Replace('/', Path.DirectorySeparatorChar)));
+                    }
+
+                    var missing = ImageChecker.CheckFile(file, doc, siteRoot, pipeline, Mapper);
+                    if (missing.Count > 0)
+                    {
+                        //var msg = string.Join(Environment.NewLine, missing.Select(m => $"{m.Ref.MarkdownFile}: missing {m.Ref.Url} -> {m.ResolvedPath} ({m.Ref.Origin})"));
+                        foreach (ImageChecker.MissingImage missingImage in missing)
+                        {
+                            imgs.Add(missingImage.Ref.MarkdownFile + "|" + missingImage.Ref.Url);
+                        }
+                        // imgs.AddRange(missing.Select(x=>x.ResolvedPath).ToArray());
+                    }
+                }
+
                 string nodeData = "<hr>";
                 string nodeFamily = "";
                 string nodeCategory = "";
@@ -114,6 +137,8 @@ public static partial class Program
                 LLMS.AppendLine("\n***\n");
 
                 File.WriteAllText(file.Replace(".md", ".html"), html);
+
+
             }
             catch (Exception ex)
             {

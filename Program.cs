@@ -152,8 +152,17 @@ public static partial class Program
 
         LoadFlubs();
         LoadMetadata();
-
+        imgs.Clear();
         BuildSlugIndex();
+
+        if (!Fast)
+        {
+            AnsiConsole.WriteLine("Copying Data Folders...");
+            foreach (string dataFolder in DataFolders)
+            {
+                FileService.CopyAll(dataFolder, dataFolder.Replace(cfg.SourceRoot, cfg.StagingRoot));
+            }
+        }
 
         foreach (Hive hive in hives)
         {
@@ -167,14 +176,6 @@ public static partial class Program
         FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\assets", "*.*");
         FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\js\", "*.*");
 
-        if (!Fast)
-        {
-            AnsiConsole.WriteLine("Copying Data Folders...");
-            foreach (string dataFolder in DataFolders)
-            {
-                FileService.CopyAll(dataFolder, dataFolder.Replace(cfg.SourceRoot, cfg.StagingRoot));
-            }
-        }
 
         File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
         File.WriteAllText($"{StagingFolder}\\llms-full.txt", LLMS.ToString());
@@ -187,6 +188,13 @@ public static partial class Program
             var distinct = RogueAts.Distinct().ToArray();
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue @s found! See RogueAts.txt");
             File.WriteAllText($"{RootFolder}\\rogueAts.txt", string.Join(Environment.NewLine, distinct));
+        }
+
+        if (imgs.Count > 0)
+        {
+            var distinct = imgs.Distinct().OrderBy(x => x).ToArray();
+            AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue IMG found! See rogueImgs.txt");
+            File.WriteAllText($"{RootFolder}\\rogueImgs.txt", string.Join(Environment.NewLine, imgs));
         }
 
         AnsiConsole.MarkupLine("[green][[Success - oo oo aa ahh ahh!]][/] [white]The Monkey is happy.[/]");
