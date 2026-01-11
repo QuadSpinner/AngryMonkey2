@@ -192,7 +192,7 @@ public static partial class Program
 
         if (imgs.Count > 0)
         {
-            var distinct = imgs.Distinct().OrderBy(x => x).ToArray();
+            var distinct = imgs.OrderBy(x => x).ToArray();
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue IMG found! See rogueImgs.txt");
             File.WriteAllText($"{RootFolder}\\rogueImgs.txt", string.Join(Environment.NewLine, imgs));
         }
