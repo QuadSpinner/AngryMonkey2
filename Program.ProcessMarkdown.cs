@@ -33,6 +33,9 @@ public static partial class Program
                     File.WriteAllText(file, HtmlProcessors.GetNodeMap(Meta.Values.ToArray()));
                 }
 
+                // get last modified date of file
+                var lastWrite = new FileInfo(file).LastWriteTimeUtc;
+
                 string content = File.ReadAllText(file); // keep raw content
 
                 content = ProcessSlugs(content);
@@ -91,6 +94,7 @@ public static partial class Program
                     .Replace("%%HREF%%", href)
                     .Replace("%%NODEDATA%%", nodeData)
                     .Replace("%%SLUG%%", uid)
+                    .Replace("%%LASTUPDATED%%", lastWrite.ToString("yyyy-MM-d"))
                     .Replace("%%NODEFAMILY%%", nodeFamily)
                     .Replace("%%NODECATEGORY%%", nodeCategory)
                     .Replace("%%V%%", DateTime.Now.ToString("MM.dd.yyyy"));
