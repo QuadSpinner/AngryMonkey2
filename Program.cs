@@ -37,6 +37,7 @@ public static partial class Program
 
     internal static ConcurrentBag<SearchObject> SearchObjects = [];
     internal static ConcurrentBag<string> RogueAts = [];
+    internal static ConcurrentBag<string> RogueHeadings = [];
     internal static Dictionary<string, Page> PageByDestMd = new(StringComparer.OrdinalIgnoreCase);
 
     internal static StringBuilder LLMS = new();
@@ -127,6 +128,7 @@ public static partial class Program
             .UseAutoIdentifiers(AutoIdentifierOptions.GitHub)
             .UseYamlFrontMatter()
             .UsePipeTables()
+            .UseDiagrams()
             .UseMediaLinks(new MediaOptions()
             {
                 Class = "border rounded ratio ratio-16x9",
@@ -155,6 +157,7 @@ public static partial class Program
         imgs.Clear();
         BuildSlugIndex();
 
+
         if (!Fast)
         {
             AnsiConsole.WriteLine("Copying Data Folders...");
@@ -164,6 +167,8 @@ public static partial class Program
             }
         }
 
+        CreateChangelog();
+
         foreach (Hive hive in hives)
         {
             GenerateNavigation(hive);
@@ -171,15 +176,16 @@ public static partial class Program
                 FileService.CopyDirectory(hive.Source, hive.Destination);
 
             ProcessMarkdown(hive);
+
+            CreateLLMS(hive);
         }
 
-        FileService.CopyDirectory($"{Templates}\\Assets", $"{StagingFolder}\\assets", "*.*");
-        FileService.CopyDirectory($"{RootFolder}\\Hives", $@"{StagingFolder}\assets\js\", "*.*");
+        FileService.CopyDirectory($@"{Templates}\Assets", $@"{StagingFolder}\assets", "*.*");
+        FileService.CopyDirectory($@"{RootFolder}\Hives", $@"{StagingFolder}\assets\js\", "*.*");
 
-
-        File.WriteAllText($"{StagingFolder}\\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
-        File.WriteAllText($"{StagingFolder}\\llms-full.txt", LLMS.ToString());
-        File.WriteAllText($"{RootFolder}\\.vscode\\atlinks.json", JsonConvert.SerializeObject(Links));
+        File.WriteAllText($@"{StagingFolder}\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
+        File.WriteAllText($@"{StagingFolder}\llms-full.txt", LLMS.ToString());
+        File.WriteAllText($@"{RootFolder}\.vscode\atlinks.json", JsonConvert.SerializeObject(Links));
 
         AnsiConsole.MarkupLine($"[white][[{hives.Length}]][/] hives\n[white][[{Links.Count}]][/] pages\n[white][[{folderCount}]][/] sections");
 
@@ -187,17 +193,89 @@ public static partial class Program
         {
             var distinct = RogueAts.Distinct().ToArray();
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue @s found! See RogueAts.txt");
-            File.WriteAllText($"{RootFolder}\\rogueAts.txt", string.Join(Environment.NewLine, distinct));
+            File.WriteAllText($@"{RootFolder}\rogueAts.txt", string.Join(Environment.NewLine, distinct));
         }
 
         if (imgs.Count > 0)
         {
             var distinct = imgs.OrderBy(x => x).ToArray();
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue IMG found! See rogueImgs.txt");
-            File.WriteAllText($"{RootFolder}\\rogueImgs.txt", string.Join(Environment.NewLine, imgs));
+            File.WriteAllText($@"{RootFolder}\rogueImgs.txt", string.Join(Environment.NewLine, distinct));
+        }
+        if (RogueHeadings.Count > 0)
+        {
+            var distinct = RogueHeadings.OrderBy(x => x).ToArray();
+            AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue HEADINGS found! See rogueHeadings.txt");
+            File.WriteAllText($@"{RootFolder}\rogueHeadings.txt", string.Join(Environment.NewLine, distinct));
         }
 
         AnsiConsole.MarkupLine("[green][[Success - oo oo aa ahh ahh!]][/] [white]The Monkey is happy.[/]");
+    }
+
+    private static void CreateChangelog()
+    {
+        DateTime monthsAgo = DateTime.UtcNow.AddMonths(-12);
+        var changedPages = Pages.Where(x => x.Modified > monthsAgo).OrderByDescending(x => x.Modified).ThenBy(x => x.Hive.Name);
+
+        StringBuilder sb = new();
+
+        sb.AppendLine("---");
+        sb.AppendLine("title: Documentation Changelog");
+        sb.AppendLine("uid: changelog");
+        sb.AppendLine("icon: compass-drafting");
+        sb.AppendLine("---\n");
+        sb.AppendLine("# Changelog\n");
+
+
+        string last = "";
+
+        foreach (Page changedPage in changedPages)
+        {
+            if (changedPage.UID == "changelog")
+                continue;
+
+            string mod = changedPage.Modified.ToString("Y");
+
+            if (mod != last)
+            {
+                sb.AppendLine($"## {mod}");
+
+                last = mod;
+
+                sb.AppendLine("| Page | Section | Last Modified |");
+                sb.AppendLine("| ---- | ------- | ------------- |");
+            }
+
+
+            sb.AppendLine($"| [{changedPage.Title}]({changedPage.Link}) | {changedPage.Hive.Name} | {changedPage.Modified:yyyy-MM-dd} |");
+        }
+
+        File.WriteAllText($@"{RootFolder}\source\history\docs-changelog.md", sb.ToString());
+    }
+
+    private static void CreateLLMS(Hive hive)
+    {
+        if (hive.IsHome)
+            return;
+
+        string[] dirs = Pages.Where(x => x.Hive == hive).Select(x => x.Directory).Distinct().ToArray();
+
+        foreach (string dir in dirs)
+        {
+            Page[] pages = Pages.Where(x => x.Hive == hive && x.Directory.Contains(dir)).ToArray();
+
+            StringBuilder llms = new();
+
+            llms.AppendLine("## SOURCE: " + hive.Destination.Replace(RootFolder, "https://docs.gaea.app").Replace("\\", "/") + "/llms.txt\n\n");
+
+            foreach (Page page in pages)
+            {
+                llms.AppendLine($"// from {page.UID} / {Path.GetFileName(page.Filename)}");
+                llms.AppendLine(page.Contents);
+            }
+
+            File.WriteAllText(dir.Replace(hive.Source, hive.Destination) + "\\llms.txt", llms.ToString());
+        }
     }
 
     private static void LoadFlubs()
@@ -284,8 +362,9 @@ public static partial class Program
                 {
                     Filename = file,
                     Hive = hive,
+                    Directory = Path.GetDirectoryName(file),
                     Link = file.Replace(hive.Source, hive.URL).Replace("\\", "/").Replace(".md", ".html"),
-                    //Contents = File.ReadAllText(file),
+                    Modified = new FileInfo(file).LastWriteTimeUtc,
                     Icon = yaml.ContainsKey("icon") ? yaml["icon"] : null,
                     Title = yaml["title"],
                     UID = yaml["uid"],

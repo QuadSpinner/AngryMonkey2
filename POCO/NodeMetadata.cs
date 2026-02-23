@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace AngryMonkey.POCO
+﻿namespace AngryMonkey.POCO
 {
     public class NodeMetadata
     {

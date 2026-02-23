@@ -5,14 +5,57 @@ using Markdig.Syntax.Inlines;
 
 namespace AngryMonkey
 {
-    public static class ImageChecker
+    public static class Validator
     {
-        public sealed record ImageRef(
-            string MarkdownFile,
-            string Url,
-            string Origin,          // "markdown" | "html-src" | "html-srcset"
-            int SpanStart,
-            int SpanEnd);
+        // Rule:
+        // - First heading (if any) must be H1
+        // - Heading level may decrease to any higher-level heading (e.g., H3 -> H1 ok)
+        // - Heading level may only increase by +1 max (e.g., H1 -> H2 ok, H1 -> H3 not ok)
+        public static bool HasOutOfOrderHeadings(MarkdownDocument doc)
+        {
+            int prevLevel = 0;
+            bool sawAnyHeading = false;
+
+            foreach (var h in EnumerateHeadingBlocks(doc))
+            {
+                int level = h.Level;
+                if ((uint)(level - 1) >= 6) continue; // ignore non 1..6
+
+                if (!sawAnyHeading)
+                {
+                    sawAnyHeading = true;
+                    if (level != 1) return true; // disallow starting with H2/H3/...
+                    prevLevel = level;
+                    continue;
+                }
+
+                if (level > prevLevel + 1) return true; // disallow jumps down the hierarchy
+                prevLevel = level;
+            }
+
+            return false;
+        }
+
+        private static IEnumerable<HeadingBlock> EnumerateHeadingBlocks(ContainerBlock container)
+        {
+            foreach (var block in container)
+            {
+                switch (block)
+                {
+                    case HeadingBlock hb:
+                        yield return hb;
+                        break;
+                    case ContainerBlock child:
+                    {
+                        foreach (var inner in EnumerateHeadingBlocks(child))
+                            yield return inner;
+                        break;
+                    }
+                }
+            }
+        }
+
+        public sealed record ImageRef(string MarkdownFile, string Url, string Origin, int SpanStart, int SpanEnd);
 
         public sealed record MissingImage(ImageRef Ref, string ResolvedPath);
 
@@ -25,7 +68,7 @@ namespace AngryMonkey
         // <img ... srcset="..."> or <source ... srcset="...">
         private static readonly Regex SrcsetRegex = new(@"<(?:img|source)\b[^>]*\bsrcset\s*=\s*(?:""([^""]+)""|'([^']+)'|([^\s>]+))", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        public static IReadOnlyList<MissingImage> CheckFile(
+        public static IReadOnlyList<MissingImage> CheckMissingImages(
             string markdownFilePath,
             MarkdownDocument doc,
             string siteRoot,                          // filesystem root for leading "/" urls
@@ -38,7 +81,6 @@ namespace AngryMonkey
             mapUrlToPath ??= DefaultMapUrlToPath;
 
             // var markdown = File.ReadAllText(markdownFilePath);
-            
 
             var refs = CollectImageRefs(doc, markdownFilePath);
 
@@ -62,26 +104,26 @@ namespace AngryMonkey
 
             foreach (var node in doc.Descendants())
             {
-                // Markdown image: ![](...)
-                if (node is LinkInline { IsImage: true } li)
+                switch (node)
                 {
-                    var url = li.Url ?? "";
-                    list.Add(new ImageRef(markdownFilePath, url, "markdown", li.Span.Start, li.Span.End));
-                    continue;
-                }
-
-                // Raw HTML inline: <img ...>
-                if (node is HtmlInline hi)
-                {
-                    ExtractFromHtml(hi.Tag, markdownFilePath, hi.Span.Start, hi.Span.End, list);
-                    continue;
-                }
-
-                // Raw HTML block: <img ...> spanning lines
-                if (node is HtmlBlock hb)
-                {
-                    var html = hb.Lines.ToString();
-                    ExtractFromHtml(html, markdownFilePath, hb.Span.Start, hb.Span.End, list);
+                    // Markdown image: ![](...)
+                    case LinkInline { IsImage: true } li:
+                    {
+                        var url = li.Url ?? "";
+                        list.Add(new ImageRef(markdownFilePath, url, "markdown", li.Span.Start, li.Span.End));
+                        continue;
+                    }
+                    // Raw HTML inline: <img ...>
+                    case HtmlInline hi:
+                        ExtractFromHtml(hi.Tag, markdownFilePath, hi.Span.Start, hi.Span.End, list);
+                        continue;
+                    // Raw HTML block: <img ...> spanning lines
+                    case HtmlBlock hb:
+                    {
+                        var html = hb.Lines.ToString();
+                        ExtractFromHtml(html, markdownFilePath, hb.Span.Start, hb.Span.End, list);
+                        break;
+                    }
                 }
             }
 
@@ -173,11 +215,24 @@ namespace AngryMonkey
             var h = url.IndexOf('#');
 
             var cut = -1;
-            if (q >= 0 && h >= 0) cut = Math.Min(q, h);
-            else if (q >= 0) cut = q;
-            else if (h >= 0) cut = h;
+            switch (q)
+            {
+                case >= 0 when h >= 0:
+                    cut = Math.Min(q, h);
+                    break;
 
-            return cut >= 0 ? url.Substring(0, cut) : url;
+                case >= 0:
+                    cut = q;
+                    break;
+
+                default:
+                {
+                    if (h >= 0) cut = h;
+                    break;
+                }
+            }
+
+            return cut >= 0 ? url[..cut] : url;
         }
 
         private static string DefaultMapUrlToPath(string markdownFilePath, string normalizedUrl)

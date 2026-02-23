@@ -1,5 +1,4 @@
-﻿using System.Reflection.Metadata.Ecma335;
-using System.Text;
+﻿using System.Text;
 using AngryMonkey.Objects;
 using AngryMonkey.POCO;
 using Humanizer;
@@ -35,24 +34,32 @@ public static partial class Program
                 }
 
                 // get last modified date of file
-                var lastWrite = new FileInfo(file).LastWriteTimeUtc;
 
                 string content = File.ReadAllText(file); // keep raw content
 
                 content = ProcessSlugs(content);
+
 
                 if (!PageByDestMd.TryGetValue(file, out var page))
                     throw new InvalidOperationException($"No page metadata for: {file}");
 
                 string title = page.Title;
                 string uid = page.UID;
+                var lastWrite = page.Modified;
 
-                content = HtmlProcessors.ExpandIncludes(content, $@"{RootFolder}\Source", 2, false);
+                content = HtmlProcessors.ExpandIncludes(content, $@"{RootFolder}\Source\.data\includes", 2, false);
+                page.Contents = content;
 
                 MarkdownDocument doc = Markdown.Parse(content, pipeline);
 
+
+                if (Validator.HasOutOfOrderHeadings(doc))
+                {
+                    RogueHeadings.Add(file);
+                }
+
                 // if first element is a heading and is same as title, remove it
-                if (doc.Count > 0 && doc.FirstOrDefault(x => x is HeadingBlock) is HeadingBlock heading)
+                if (doc.Count > 0 && doc.Count(x => x is HeadingBlock) > 1 && doc.FirstOrDefault(x => x is HeadingBlock) is HeadingBlock heading)
                 {
                     var headingText = heading.Inline?.FirstChild?.ToString() ?? "";
                     if (heading.Level == 1 && headingText.Equals(title, StringComparison.OrdinalIgnoreCase))
@@ -71,6 +78,7 @@ public static partial class Program
                     contentHTML += "\n" + htmlTable;
 
                     flubTable = mdTable;
+                    page.Contents += "\n" + flubTable;
                 }
 
                 {
@@ -83,11 +91,11 @@ public static partial class Program
                         return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(mdPath)!, url.Replace('/', Path.DirectorySeparatorChar)));
                     }
 
-                    var missing = ImageChecker.CheckFile(file, doc, siteRoot, pipeline, Mapper);
+                    var missing = Validator.CheckMissingImages(file, doc, siteRoot, pipeline, Mapper);
                     if (missing.Count > 0)
                     {
                         //var msg = string.Join(Environment.NewLine, missing.Select(m => $"{m.Ref.MarkdownFile}: missing {m.Ref.Url} -> {m.ResolvedPath} ({m.Ref.Origin})"));
-                        foreach (ImageChecker.MissingImage missingImage in missing)
+                        foreach (Validator.MissingImage missingImage in missing)
                         {
                             imgs.Add(missingImage.Ref.MarkdownFile + "|" + missingImage.Ref.Url);
                         }
