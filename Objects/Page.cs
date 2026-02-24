@@ -26,6 +26,7 @@
 
         public Link HrefPrev { get; set; }
         public Link HrefNext { get; set; }
+        public string Tag { get; set; }
         public string Link { get; set; }
         public string Directory { get; set; }
         public DateTime Modified { get; set; }

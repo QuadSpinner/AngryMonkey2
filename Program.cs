@@ -38,6 +38,7 @@ public static partial class Program
     internal static ConcurrentBag<SearchObject> SearchObjects = [];
     internal static ConcurrentBag<string> RogueAts = [];
     internal static ConcurrentBag<string> RogueHeadings = [];
+    internal static ConcurrentBag<string> ThinPages = [];
     internal static Dictionary<string, Page> PageByDestMd = new(StringComparer.OrdinalIgnoreCase);
 
     internal static StringBuilder LLMS = new();
@@ -129,6 +130,7 @@ public static partial class Program
             .UseYamlFrontMatter()
             .UsePipeTables()
             .UseDiagrams()
+            .UseAutoLinks()
             .UseMediaLinks(new MediaOptions()
             {
                 Class = "border rounded ratio ratio-16x9",
@@ -150,13 +152,17 @@ public static partial class Program
         {
             //GenerateMissingFolderIndexMarkdown(hive);
             CollectPages(hive);
+            if (hive.Name == "Videos")
+            {
+                new YouTube().MakeYouTubePages(hive);
+                CollectPages(hive);
+            }
         }
 
         LoadFlubs();
         LoadMetadata();
         imgs.Clear();
         BuildSlugIndex();
-
 
         if (!Fast)
         {
@@ -208,6 +214,12 @@ public static partial class Program
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue HEADINGS found! See rogueHeadings.txt");
             File.WriteAllText($@"{RootFolder}\rogueHeadings.txt", string.Join(Environment.NewLine, distinct));
         }
+        if (ThinPages.Count > 0)
+        {
+            var distinct = ThinPages.OrderBy(x => x).ToArray();
+            AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] Thin Pages found! See thinPages.txt");
+            File.WriteAllText($@"{RootFolder}\thinPages.txt", string.Join(Environment.NewLine, distinct));
+        }
 
         AnsiConsole.MarkupLine("[green][[Success - oo oo aa ahh ahh!]][/] [white]The Monkey is happy.[/]");
     }
@@ -225,7 +237,6 @@ public static partial class Program
         sb.AppendLine("icon: compass-drafting");
         sb.AppendLine("---\n");
         sb.AppendLine("# Changelog\n");
-
 
         string last = "";
 
@@ -245,7 +256,6 @@ public static partial class Program
                 sb.AppendLine("| Page | Section | Last Modified |");
                 sb.AppendLine("| ---- | ------- | ------------- |");
             }
-
 
             sb.AppendLine($"| [{changedPage.Title}]({changedPage.Link}) | {changedPage.Hive.Name} | {changedPage.Modified:yyyy-MM-dd} |");
         }
@@ -355,6 +365,9 @@ public static partial class Program
         {
             try
             {
+                if (Pages.Any(x => x.Filename == file))
+                    continue;
+
                 var yaml = FrontMatter.GetFrontMatter(File.ReadAllLines(file));
                 string title = yaml["title"];
 
@@ -367,6 +380,7 @@ public static partial class Program
                     Modified = new FileInfo(file).LastWriteTimeUtc,
                     Icon = yaml.ContainsKey("icon") ? yaml["icon"] : null,
                     Title = yaml["title"],
+                    Tag = yaml.ContainsKey("tag") ? yaml["tag"] : null,
                     UID = yaml["uid"],
                     Hidden = yaml.ContainsKey("hidden") && yaml["hidden"] == "true",
                     StartsSection = yaml.ContainsKey("section") && yaml["section"] == "true"

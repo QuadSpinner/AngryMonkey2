@@ -16,10 +16,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="youtube.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="youtube.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="anglesharp" Version="1.4.0" />
     <PackageReference Include="Humanizer.Core" Version="2.14.1" />
     <PackageReference Include="Markdig" Version="0.44.0" />
     <PackageReference Include="newtonsoft.json" Version="13.0.4" />
+    <PackageReference Include="QuadSpinner.Adjunct" Version="1.0.1" />
     <PackageReference Include="spectre.console" Version="0.54.0" />
   </ItemGroup>
 

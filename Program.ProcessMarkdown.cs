@@ -11,6 +11,7 @@ namespace AngryMonkey;
 public static partial class Program
 {
     public static List<string> imgs = [];
+
     public static void ProcessMarkdown(Hive hive)
     {
         string[] md = Directory.GetFiles(
@@ -39,7 +40,6 @@ public static partial class Program
 
                 content = ProcessSlugs(content);
 
-
                 if (!PageByDestMd.TryGetValue(file, out var page))
                     throw new InvalidOperationException($"No page metadata for: {file}");
 
@@ -51,7 +51,6 @@ public static partial class Program
                 page.Contents = content;
 
                 MarkdownDocument doc = Markdown.Parse(content, pipeline);
-
 
                 if (Validator.HasOutOfOrderHeadings(doc))
                 {
@@ -69,6 +68,8 @@ public static partial class Program
                 }
 
                 string contentHTML = doc.ToHtml(pipeline);
+
+
 
                 string flubTable = "";
 
@@ -100,6 +101,14 @@ public static partial class Program
                             imgs.Add(missingImage.Ref.MarkdownFile + "|" + missingImage.Ref.Url);
                         }
                         // imgs.AddRange(missing.Select(x=>x.ResolvedPath).ToArray());
+                    }
+
+                    if (contentHTML.Length < 300)
+                    {
+                        if (!hive.IsHome && hive.ShortName is not ("Videos" or "History") && !contentHTML.Contains("show-sublinks"))
+                        {
+                            ThinPages.Add(file);
+                        }
                     }
                 }
 
@@ -145,8 +154,6 @@ public static partial class Program
                 LLMS.AppendLine("\n***\n");
 
                 File.WriteAllText(file.Replace(".md", ".html"), html);
-
-
             }
             catch (Exception ex)
             {
