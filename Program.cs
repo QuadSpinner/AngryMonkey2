@@ -153,7 +153,7 @@ public static partial class Program
         {
             //GenerateMissingFolderIndexMarkdown(hive);
             CollectPages(hive);
-            if (hive.Name == "Videos")
+            if (hive.Type == HiveType.Videos)
             {
                 new YouTube().MakeYouTubePages(hive);
                 CollectPages(hive);
@@ -174,11 +174,16 @@ public static partial class Program
             }
         }
 
-        CreateChangelog();
 
         foreach (Hive hive in hives)
         {
             GenerateNavigation(hive);
+
+            if (hive.Type == HiveType.Changelogs)
+            {
+                CreateChangelog(hive);
+            }
+
             if (!hive.IsHome)
                 FileService.CopyDirectory(hive.Source, hive.Destination);
 
@@ -228,14 +233,14 @@ public static partial class Program
         if (ThinPages.Count > 0)
         {
             var distinct = ThinPages.OrderBy(x => x).ToArray();
-            AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] Thin Pages found! See thinPages.txt");
-            File.WriteAllText($@"{RootFolder}\thinPages.txt", string.Join(Environment.NewLine, distinct));
+            AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] Thin Pages found! See roguePages.txt");
+            File.WriteAllText($@"{RootFolder}\roguePages.txt", string.Join(Environment.NewLine, distinct));
         }
 
         AnsiConsole.MarkupLine("[green][[Success - oo oo aa ahh ahh!]][/] [white]The Monkey is happy.[/]");
     }
 
-    private static void CreateChangelog()
+    private static void CreateChangelog(Hive hive)
     {
         DateTime monthsAgo = DateTime.UtcNow.AddMonths(-12);
         var changedPages = Pages.Where(x => x.Modified > monthsAgo).OrderByDescending(x => x.Modified).ThenBy(x => x.Hive.Name);
@@ -275,7 +280,7 @@ public static partial class Program
             i++;
         }
 
-        File.WriteAllText($@"{RootFolder}\source\history\docs-changelog.md", sb.ToString());
+        File.WriteAllText($@"{hive.Source}\docs-changelog.md", sb.ToString());
     }
 
     private static void CreateLLMS(Hive hive)
@@ -295,7 +300,7 @@ public static partial class Program
 
             foreach (Page page in pages)
             {
-                llms.AppendLine($"// from {page.UID} / {Path.GetFileName(page.Filename)}");
+                llms.AppendLine($"// from {page.UID}/{Path.GetFileName(page.Filename)}");
                 llms.AppendLine(page.Contents);
             }
 
@@ -372,6 +377,8 @@ public static partial class Program
         Slugs = Links.ToDictionary(x => x.Slug, StringComparer.OrdinalIgnoreCase);
     }
 
+    private static HashSet<string> existingPages = [];
+
     private static void CollectPages(Hive hive)
     {
         string[] md = Directory.GetFiles(hive.Source, "*.md", hive.IsHome ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories);
@@ -380,7 +387,7 @@ public static partial class Program
         {
             try
             {
-                if (Pages.Any(x => x.Filename == file))
+                if (existingPages.Contains(file))
                     continue;
 
                 var yaml = FrontMatter.GetFrontMatter(File.ReadAllLines(file));
@@ -390,13 +397,17 @@ public static partial class Program
                 {
                     Filename = file,
                     Hive = hive,
-                    Directory = Path.GetDirectoryName(file),
-                    Link = file.Replace(hive.Source, hive.URL).Replace("\\", "/").Replace(".md", ".html"),
-                    Modified = new FileInfo(file).LastWriteTimeUtc,
-                    Icon = yaml.ContainsKey("icon") ? yaml["icon"] : null,
-                    Title = yaml["title"],
-                    Tag = yaml.ContainsKey("tag") ? yaml["tag"] : null,
                     UID = yaml["uid"],
+                    Title = yaml["title"],
+
+                    // PATHS AND LINKS
+                    Directory = Path.GetDirectoryName(file),
+                    Modified = new FileInfo(file).LastWriteTimeUtc,
+                    Link = file.Replace(hive.Source, hive.URL).Replace("\\", "/").Replace(".md", ".html"),
+
+                    // FRONT MATTER
+                    Icon = yaml.ContainsKey("icon") ? yaml["icon"] : null,
+                    Tag = yaml.ContainsKey("tag") ? yaml["tag"] : null,
                     Hidden = yaml.ContainsKey("hidden") && yaml["hidden"] == "true",
                     StartsSection = yaml.ContainsKey("section") && yaml["section"] == "true"
                 };
@@ -407,6 +418,8 @@ public static partial class Program
 
                 var link = new Link(page.Link, title, page.UID, page.Icon, page.Hidden);
                 Links.Add(link);
+
+                existingPages.Add(file);
             }
             catch (Exception ex)
             {

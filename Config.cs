@@ -39,13 +39,15 @@ namespace AngryMonkey
                 string source = string.IsNullOrEmpty(folder) ? cfg.SourceRoot : Path.Combine(cfg.SourceRoot, folder);
                 string dest = string.IsNullOrEmpty(folder) ? cfg.StagingRoot : Path.Combine(cfg.StagingRoot, folder);
 
+                Enum.TryParse(h.Type, out HiveType ht);
+
                 return new Hive
                 {
                     Name = h.Name,
                     Source = source,
                     Destination = dest,
                     ShortName = h.ShortName,
-                    IsHome = h.IsHome,
+                    Type = ht,
                     URL = h.Url
                 };
             }).ToArray();

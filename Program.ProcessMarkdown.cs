@@ -36,9 +36,9 @@ public static partial class Program
 
                 // get last modified date of file
 
-                string content = File.ReadAllText(file); // keep raw content
+                string markdown = File.ReadAllText(file); // keep raw content
 
-                content = ProcessSlugs(content);
+                markdown = ProcessSlugs(markdown);
 
                 if (!PageByDestMd.TryGetValue(file, out var page))
                     throw new InvalidOperationException($"No page metadata for: {file}");
@@ -47,10 +47,10 @@ public static partial class Program
                 string uid = page.UID;
                 var lastWrite = page.Modified;
 
-                content = HtmlProcessors.ExpandIncludes(content, $@"{RootFolder}\Source\.data\includes", 2, false);
-                page.Contents = content;
+                markdown = HtmlProcessors.ExpandIncludes(markdown, $@"{RootFolder}\Source\.data\includes", 2, false);
+                page.Contents = markdown;
 
-                MarkdownDocument doc = Markdown.Parse(content, pipeline);
+                MarkdownDocument doc = Markdown.Parse(markdown, pipeline);
 
                 if (Validator.HasOutOfOrderHeadings(doc))
                 {
@@ -76,7 +76,7 @@ public static partial class Program
 
                 string flubTable = "";
 
-                if (Flubs.ContainsKey(uid))
+                if (hive.Type == HiveType.Reference && Flubs.ContainsKey(uid))
                 {
                     (string htmlTable, string mdTable) = HtmlProcessors.GetFlubTable(title, Flubs[uid]);
                     contentHTML += "\n" + htmlTable;
@@ -108,7 +108,7 @@ public static partial class Program
 
                     if (contentHTML.Length < 300)
                     {
-                        if (!hive.IsHome && hive.ShortName is not ("Videos" or "History") && !contentHTML.Contains("show-sublinks"))
+                        if (!hive.IsHome && hive.Type is not (HiveType.Videos or HiveType.Changelogs) && !contentHTML.Contains("show-sublinks"))
                         {
                             ThinPages.Add(file);
                         }
@@ -118,35 +118,37 @@ public static partial class Program
                 string nodeData = "<hr>";
                 string nodeFamily = "";
                 string nodeCategory = "";
-                if (Meta.ContainsKey(uid))
+
+                if (hive.Type == HiveType.Reference && Meta.ContainsKey(uid))
                 {
                     nodeData = Markdown.ToHtml(HtmlProcessors.ExpandIncludes(GetNodeData(Meta[uid]), $@"{RootFolder}\Source", 2, false), pipeline);
                     nodeFamily = Meta[uid].Family;
                     nodeCategory = Meta[uid].Toolbox;
                 }
 
-                html = html.Replace("%%CONTENT%%", contentHTML);
-
                 Slugs.TryGetValue(uid, out var selfLink);
                 var href = selfLink?.Href ?? file.Replace(hive.Destination, hive.URL).Replace("\\", "/").Replace(".md", ".html");
 
-                html = html.Replace("%%TITLE%%", title[0].IsAlphaUpper() ? title : title.Humanize(LetterCasing.Title))
+                html = html.Replace("%%CONTENT%%", contentHTML)
+                    .Replace("%%SLUG%%", uid)
+                    .Replace("%%TITLE%%", title[0].IsAlphaUpper() ? title : title.Humanize(LetterCasing.Title))
+                    .Replace("%%HREF%%", href)
+
                     .Replace("%%HIVE%%", hive.Name)
                     .Replace("%%HIVEPATH%%", hive.URL)
                     .Replace("%%SHORTNAME%%", hive.ShortName)
-                    .Replace("%%HREF%%", href)
+
                     .Replace("%%NODEDATA%%", nodeData)
-                    .Replace("%%SLUG%%", uid)
-                    .Replace("%%LASTUPDATED%%", lastWrite.ToString("yyyy-MM-d"))
                     .Replace("%%NODEFAMILY%%", nodeFamily)
                     .Replace("%%NODECATEGORY%%", nodeCategory)
+                    .Replace("%%LASTUPDATED%%", lastWrite.ToString("yyyy-MM-d"))
                     .Replace("%%V%%", DateTime.Now.ToString("MM.dd.yyyy"));
                 //.Replace("%%PAGETITLE%%", $"<span>{hive.Name}</span><span>{title}</span>");
 
-                if (AtToken.IsMatch(content))
+                if (AtToken.IsMatch(markdown))
                     RogueAts.Add(file);
 
-                var so = SearchBuilder.ToSearchObject(content, title, hive, href);
+                var so = SearchBuilder.ToSearchObject(markdown, title, hive, href);
                 SearchObjects.Add(so);
                 LLMS.AppendLine("\n---");
                 LLMS.AppendLine(uid);
