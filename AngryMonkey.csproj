@@ -21,7 +21,7 @@
 
   <ItemGroup>
     <Content Include="youtube.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 

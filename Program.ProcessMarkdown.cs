@@ -69,7 +69,10 @@ public static partial class Program
 
                 string contentHTML = doc.ToHtml(pipeline);
 
-
+                if (hive.ShortName is "Reference")
+                {
+                    Linktionary.Add($"/{page.UID},https://docs.gaea.app{page.Link}");
+                }
 
                 string flubTable = "";
 

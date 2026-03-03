@@ -39,6 +39,7 @@ public static partial class Program
     internal static ConcurrentBag<string> RogueAts = [];
     internal static ConcurrentBag<string> RogueHeadings = [];
     internal static ConcurrentBag<string> ThinPages = [];
+    internal static ConcurrentBag<string> Linktionary = [];
     internal static Dictionary<string, Page> PageByDestMd = new(StringComparer.OrdinalIgnoreCase);
 
     internal static StringBuilder LLMS = new();
@@ -193,6 +194,16 @@ public static partial class Program
         File.WriteAllText($@"{StagingFolder}\llms-full.txt", LLMS.ToString());
         File.WriteAllText($@"{RootFolder}\.vscode\atlinks.json", JsonConvert.SerializeObject(Links));
 
+
+        StringBuilder sb = new();
+
+        foreach (string s in Linktionary)
+        {
+            sb.AppendLine(s);
+        }
+
+        File.WriteAllText($@"{RootFolder}\linktionary.csv", sb.ToString());
+
         AnsiConsole.MarkupLine($"[white][[{hives.Length}]][/] hives\n[white][[{Links.Count}]][/] pages\n[white][[{folderCount}]][/] sections");
 
         if (!RogueAts.IsEmpty)
@@ -237,27 +248,31 @@ public static partial class Program
         sb.AppendLine("icon: compass-drafting");
         sb.AppendLine("---\n");
         sb.AppendLine("# Changelog\n");
+        sb.AppendLine("\n" +
+                      "The following tables list changes to individual pages. To see the exact change, go to any page and select the 'Updated on XXXXX' link in the right sidebar." +
+                      "\n");
 
         string last = "";
 
+        int i = 1;
         foreach (Page changedPage in changedPages)
         {
             if (changedPage.UID == "changelog")
                 continue;
 
             string mod = changedPage.Modified.ToString("Y");
-
             if (mod != last)
             {
                 sb.AppendLine($"## {mod}");
-
+                i = 1;
                 last = mod;
 
-                sb.AppendLine("| Page | Section | Last Modified |");
-                sb.AppendLine("| ---- | ------- | ------------- |");
+                sb.AppendLine("|  Id  | Page | Section | Last Modified |");
+                sb.AppendLine("| ---- | ---- | ------- | ------------- |");
             }
 
-            sb.AppendLine($"| [{changedPage.Title}]({changedPage.Link}) | {changedPage.Hive.Name} | {changedPage.Modified:yyyy-MM-dd} |");
+            sb.AppendLine($"| {i:000} | [{changedPage.Title}]({changedPage.Link}) | {changedPage.Hive.Name} | {changedPage.Modified:yyyy-MM-dd} |");
+            i++;
         }
 
         File.WriteAllText($@"{RootFolder}\source\history\docs-changelog.md", sb.ToString());
