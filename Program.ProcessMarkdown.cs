@@ -83,6 +83,11 @@ public static partial class Program
 
                     flubTable = mdTable;
                     page.Contents += "\n" + flubTable;
+
+                    if (Flubs[uid].Any(x => x.Description?.Length < 20))
+                    {
+                        ThinPages.Add(file);
+                    }
                 }
 
                 {
@@ -106,9 +111,12 @@ public static partial class Program
                         // imgs.AddRange(missing.Select(x=>x.ResolvedPath).ToArray());
                     }
 
-                    if (contentHTML.Length < 300)
+
+                    if (contentHTML.Length < 300 
+                        && hive.Type is not (HiveType.TopLevel or HiveType.Videos or HiveType.Changelogs) 
+                        && !contentHTML.Contains("show-sublinks"))
                     {
-                        if (!hive.IsHome && hive.Type is not (HiveType.Videos or HiveType.Changelogs) && !contentHTML.Contains("show-sublinks"))
+                        if (!ThinPages.Contains(file))
                         {
                             ThinPages.Add(file);
                         }

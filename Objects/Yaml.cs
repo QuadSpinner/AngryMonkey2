@@ -1,5 +1,6 @@
 ﻿using System.Globalization;
 using System.Text;
+using QuadSpinner.Adjunct;
 
 namespace AngryMonkey
 {
@@ -24,7 +25,14 @@ namespace AngryMonkey
 
                 if (!yaml.ContainsKey(data[0].Trim()))
                 {
-                    yaml.Add(data[0].Trim(), data[1].Trim());
+                    if (data.Length > 2)
+                    {
+                        yaml.Add(data[0].Trim(), $"\"" + line.Strip(data[0] + ": ") + "\"");
+                    }
+                    else
+                    {
+                        yaml.Add(data[0].Trim(), data[1].Trim());
+                    }
                 }
             }
 

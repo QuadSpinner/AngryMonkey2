@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Spectre.Console;
 
 namespace AngryMonkey
 {
@@ -19,21 +20,26 @@ namespace AngryMonkey
 
         internal void MakeYouTubePages(Hive hive)
         {
-            _hive = hive;
-
-            _yt = new HttpClient();
-            _youtubeApiKey = File.ReadAllText("youtube.txt");
-            _yt.DefaultRequestHeaders.Accept.Clear();
-            _yt.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-            ImportConfig imports = YouTubeImporter.ReadFromFile($"{Program.RootFolder}\\youtube.json");
-
-            foreach (Channel item in imports.Channels)
+            try
             {
-                Import(item.IDs, item.Directory, item.Authorized, item.Official);
+                _hive = hive;
+
+                _yt = new HttpClient();
+                _youtubeApiKey = File.ReadAllText("youtube.txt");
+                _yt.DefaultRequestHeaders.Accept.Clear();
+                _yt.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+                ImportConfig imports = YouTubeImporter.ReadFromFile($"{Program.RootFolder}\\youtube.json");
+
+                foreach (Channel item in imports.Channels)
+                {
+                    Import(item.IDs, item.Directory, item.Authorized, item.Official);
+                }
             }
-
-
+            catch (Exception ex)
+            {
+                AnsiConsole.WriteLine("YouTube pages failed: " + ex.Message);
+            }
         }
 
         public void Import(IEnumerable<string> youtubeUrls, string directory = "", bool authorized = false, bool official = false)

@@ -1,8 +1,9 @@
-﻿using System.Globalization;
+﻿using Humanizer;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Humanizer;
+using QuadSpinner.Adjunct;
 
 namespace AngryMonkey
 {
@@ -101,11 +102,13 @@ namespace AngryMonkey
 
             [JsonPropertyName("url")]
             public string Url { get; set; }
+
             [JsonPropertyName("icon")]
             public string Icon { get; set; }
 
             [JsonPropertyName("section")]
             public bool? Section { get; set; }
+
             [JsonPropertyName("hidden")]
             public bool? Hidden { get; set; }
 
@@ -142,12 +145,11 @@ namespace AngryMonkey
 
             return new TocItem
             {
-                Title = title,
+                Title = title.Strip("\""),
                 Children = children.Count > 0 ? children : null,
                 Icon = !string.IsNullOrWhiteSpace(iconOverrideFromParent) ? iconOverrideFromParent : null
             };
         }
-
 
         private static List<TocItem> BuildFolderChildren(DirectoryInfo hiveRoot,
             DirectoryInfo currentDir,
@@ -170,7 +172,7 @@ namespace AngryMonkey
                     var title = !string.Equals(meta.Title, folderTitle, StringComparison.CurrentCultureIgnoreCase) ? meta.Title : "Overview";
                     var url = UrlForIndex(hiveRoot.FullName, indexPath, baseUrl);
 
-                    items.Add(new TocItem { Title = title, Url = url, Icon = meta.Icon, Hidden = meta.Hidden });
+                    items.Add(new TocItem { Title = title.Strip("\""), Url = url, Icon = meta.Icon, Hidden = meta.Hidden });
                 }
             }
 
@@ -186,15 +188,17 @@ namespace AngryMonkey
                     return new
                     {
                         File = f,
-                        Title = meta.Title ?? ToTitle(Path.GetFileNameWithoutExtension(f.Name)),
+                        Title = meta.Title.Strip("\"") ?? ToTitle(Path.GetFileNameWithoutExtension(f.Name)),
                         meta.Order,
                         meta.Section,
                         meta.Icon,
-                        meta.Hidden
+                        meta.Hidden,
+                        meta.Modified
                     };
                 })
                 .Where(x => x.Hidden is null or false)
-                .OrderBy(x => x.Order)
+                .OrderByDescending(x => x.Modified)
+                .ThenBy(x => x.Order)
                 .ThenBy(x => x.Title, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(x => x.File.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(x => new TocItem
@@ -244,7 +248,6 @@ namespace AngryMonkey
             public List<string> Order { get; } = [];
             public Dictionary<string, string> Titles { get; } = new(StringComparer.OrdinalIgnoreCase);
             public Dictionary<string, string> Icons { get; } = new(StringComparer.OrdinalIgnoreCase);
-
         }
 
         private static FolderManifest ReadFoldersManifest(string dirPath, string manifestFileName)
@@ -293,7 +296,6 @@ namespace AngryMonkey
             return m;
         }
 
-
         private static IEnumerable<DirectoryInfo> SortSubdirs(DirectoryInfo[] subdirs, List<string> orderedNames)
         {
             if (orderedNames.Count == 0)
@@ -319,6 +321,7 @@ namespace AngryMonkey
             public int Order { get; init; }
             public bool? Section { get; init; }
             public bool? Hidden { get; init; }
+            public DateTime? Modified { get; set; }
         }
 
         private static PageMeta ReadFrontMatter(string mdPath)
@@ -328,8 +331,26 @@ namespace AngryMonkey
             fm.TryGetValue("title", out var title);
             fm.TryGetValue("order", out var orderStr);
             fm.TryGetValue("icon", out var iconStr);
+            fm.TryGetValue("modified", out var modifiedStr);
             bool? section = fm.ContainsKey("section") ? true : null;
             bool? hidden = fm.ContainsKey("hidden") ? true : null;
+
+
+            DateTime? dt = null;
+
+            if (modifiedStr.NotEmpty())
+            {
+                dt = DateTime.ParseExact(
+                    modifiedStr.Strip("\""),
+                    [
+                        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'",
+                        "yyyy-MM-dd'T'HH:mm:ssK",
+                        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK"
+                    ], CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal
+                );
+            }
 
             if (string.IsNullOrWhiteSpace(title))
                 title = null;
@@ -339,7 +360,15 @@ namespace AngryMonkey
                 int.TryParse(orderStr.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n))
                 order = n;
 
-            return new PageMeta { Title = title, Order = order, Section = section, Icon = iconStr, Hidden = hidden };
+            return new PageMeta
+            {
+                Title = title,
+                Order = order,
+                Section = section,
+                Icon = iconStr,
+                Hidden = hidden,
+                Modified = dt
+            };
         }
 
         // -----------------------------
