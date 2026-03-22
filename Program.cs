@@ -174,7 +174,6 @@ public static partial class Program
             }
         }
 
-
         foreach (Hive hive in hives)
         {
             GenerateNavigation(hive);
@@ -193,12 +192,11 @@ public static partial class Program
         }
 
         FileService.CopyDirectory($@"{Templates}\Assets", $@"{StagingFolder}\assets", "*.*");
-        FileService.CopyDirectory($@"{RootFolder}\Hives", $@"{StagingFolder}\assets\js\", "*.*");
-
+        Directory.CreateDirectory($"{RootFolder}\\Reports");
         File.WriteAllText($@"{StagingFolder}\search.json", JsonConvert.SerializeObject(SearchObjects, new JsonSerializerSettings { Formatting = Formatting.None }));
         File.WriteAllText($@"{StagingFolder}\llms-full.txt", LLMS.ToString());
         File.WriteAllText($@"{RootFolder}\.vscode\atlinks.json", JsonConvert.SerializeObject(Links));
-
+        CreateResx();
 
         StringBuilder sb = new();
 
@@ -207,7 +205,7 @@ public static partial class Program
             sb.AppendLine(s);
         }
 
-        File.WriteAllText($@"{RootFolder}\linktionary.csv", sb.ToString());
+        File.WriteAllText($@"{RootFolder}\Reports\linktionary.csv", sb.ToString());
 
         AnsiConsole.MarkupLine($"[white][[{hives.Length}]][/] hives\n[white][[{Links.Count}]][/] pages\n[white][[{folderCount}]][/] sections");
 
@@ -215,29 +213,47 @@ public static partial class Program
         {
             var distinct = RogueAts.Distinct().ToArray();
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue @s found! See RogueAts.txt");
-            File.WriteAllText($@"{RootFolder}\rogueAts.txt", string.Join(Environment.NewLine, distinct));
+            File.WriteAllText($@"{RootFolder}\Reports\rogueAts.txt", string.Join(Environment.NewLine, distinct));
         }
 
         if (imgs.Count > 0)
         {
             var distinct = imgs.OrderBy(x => x).ToArray();
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue IMG found! See rogueImgs.txt");
-            File.WriteAllText($@"{RootFolder}\rogueImgs.txt", string.Join(Environment.NewLine, distinct));
+            File.WriteAllText($@"{RootFolder}\Reports\rogueImgs.txt", string.Join(Environment.NewLine, distinct));
         }
         if (RogueHeadings.Count > 0)
         {
             var distinct = RogueHeadings.OrderBy(x => x).ToArray();
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] rogue HEADINGS found! See rogueHeadings.txt");
-            File.WriteAllText($@"{RootFolder}\rogueHeadings.txt", string.Join(Environment.NewLine, distinct));
+            File.WriteAllText($@"{RootFolder}\Reports\rogueHeadings.txt", string.Join(Environment.NewLine, distinct));
         }
         if (ThinPages.Count > 0)
         {
             var distinct = ThinPages.OrderBy(x => x).ToArray();
             AnsiConsole.MarkupLine($"[DarkOrange][[{distinct.Length}]][/] Thin Pages found! See roguePages.txt");
-            File.WriteAllText($@"{RootFolder}\roguePages.txt", string.Join(Environment.NewLine, distinct));
+            File.WriteAllText($@"{RootFolder}\Reports\roguePages.txt", string.Join(Environment.NewLine, distinct));
         }
 
         AnsiConsole.MarkupLine("[green][[Success - oo oo aa ahh ahh!]][/] [white]The Monkey is happy.[/]");
+    }
+
+    private static void CreateResx()
+    {
+        List<NodeHelp> helps = [];
+
+        foreach (var meta in Meta)
+        {
+            helps.Add(new NodeHelp()
+            {
+                Name = meta.Value.Name,
+                Description = meta.Value.Description,
+                Flubs = Flubs.ContainsKey(meta.Key) ? Flubs[meta.Key] : []
+            });
+        }
+
+        // write to file
+        File.WriteAllText($@"{RootFolder}\Reports\ResX.json", JsonConvert.SerializeObject(helps, new JsonSerializerSettings { Formatting = Formatting.Indented, DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate }));
     }
 
     private static void CreateChangelog(Hive hive)
@@ -325,7 +341,7 @@ public static partial class Program
             }
             catch (Exception ex)
             {
-                Console.WriteLine(file);
+                Console.WriteLine(file + " - " + ex.Message);
             }
         }
     }
@@ -399,7 +415,7 @@ public static partial class Program
                     Hive = hive,
                     UID = yaml["uid"],
                     Title = yaml["title"],
-
+                    Description = yaml.ContainsKey("description") ? yaml["description"] : null,
                     // PATHS AND LINKS
                     Directory = Path.GetDirectoryName(file),
                     Modified = new FileInfo(file).LastWriteTimeUtc,
@@ -453,11 +469,11 @@ public static partial class Program
     {
         if (hive.IsHome)
         {
-            File.WriteAllText($@"{RootFolder}\Hives\TOC_{hive.ShortName}.js", "window.SITE_TOC = null;");
+            File.WriteAllText($@"{StagingFolder}\assets\js\TOC_{hive.ShortName}.js", "window.SITE_TOC = null;");
             return;
         }
 
-        TocGenerator.WriteHiveTocJs(hive.Source, hive.URL, $@"{RootFolder}\Hives\TOC_{hive.ShortName}.js");
+        TocGenerator.WriteHiveTocJs(hive.Source, hive.URL, $@"{StagingFolder}\assets\js\TOC_{hive.ShortName}.js");
     }
 
     public static void DeleteStagedHive(Hive hive)

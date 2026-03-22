@@ -8,6 +8,8 @@
 
         public string Filename { get; set; }
 
+        public string Description { get; set; }
+
         public Dictionary<string, string> AlternateNames { get; set; } = [];
         public Dictionary<string, string> Sublinks { get; set; } = [];
 

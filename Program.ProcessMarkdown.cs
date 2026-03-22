@@ -44,8 +44,14 @@ public static partial class Program
                     throw new InvalidOperationException($"No page metadata for: {file}");
 
                 string title = page.Title;
+                string desc = page.Description;
                 string uid = page.UID;
                 var lastWrite = page.Modified;
+
+                if (string.IsNullOrEmpty(desc))
+                {
+                    desc = "Gaea Documentation";
+                }
 
                 markdown = HtmlProcessors.ExpandIncludes(markdown, $@"{RootFolder}\Source\.data\includes", 2, false);
                 page.Contents = markdown;
@@ -112,8 +118,8 @@ public static partial class Program
                     }
 
 
-                    if (contentHTML.Length < 300 
-                        && hive.Type is not (HiveType.TopLevel or HiveType.Videos or HiveType.Changelogs) 
+                    if (contentHTML.Length < 300
+                        && hive.Type is not (HiveType.TopLevel or HiveType.Videos or HiveType.Changelogs)
                         && !contentHTML.Contains("show-sublinks"))
                     {
                         if (!ThinPages.Contains(file))
@@ -141,6 +147,7 @@ public static partial class Program
                     .Replace("%%SLUG%%", uid)
                     .Replace("%%TITLE%%", title[0].IsAlphaUpper() ? title : title.Humanize(LetterCasing.Title))
                     .Replace("%%HREF%%", href)
+                    .Replace("%%DESC%%", desc)
 
                     .Replace("%%HIVE%%", hive.Name)
                     .Replace("%%HIVEPATH%%", hive.URL)

@@ -11,4 +11,13 @@
 
         public Flub[] Flubs { get; set; }
     }
+
+
+    [Serializable]
+    public class NodeHelp
+    {
+        public string Name { get; set; }
+        public string Description { get; set; }
+        public Flub[] Flubs { get; set; }
+    }
 }
